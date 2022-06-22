@@ -13,9 +13,9 @@ platforms = ["linux/amd64"]
 
   [build.args]
     sources = """
-    deb http://archive.ubuntu.com/ubuntu jammy main
-    deb http://archive.ubuntu.com/ubuntu jammy-updates main
-    deb http://archive.ubuntu.com/ubuntu jammy-security main
+    deb http://archive.ubuntu.com/ubuntu jammy main universe multiverse
+    deb http://archive.ubuntu.com/ubuntu jammy-updates main universe multiverse
+    deb http://archive.ubuntu.com/ubuntu jammy-security main universe multiverse
     """
 
     packages = """\
@@ -213,9 +213,9 @@ platforms = ["linux/amd64"]
 
   [run.args]
     sources = """
-    deb http://archive.ubuntu.com/ubuntu jammy main
-    deb http://archive.ubuntu.com/ubuntu jammy-updates main
-    deb http://archive.ubuntu.com/ubuntu jammy-security main
+    deb http://archive.ubuntu.com/ubuntu jammy main universe multiverse
+    deb http://archive.ubuntu.com/ubuntu jammy-updates main universe multiverse
+    deb http://archive.ubuntu.com/ubuntu jammy-security main universe multiverse
     """
 
     packages = """\
