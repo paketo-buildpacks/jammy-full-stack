@@ -1,0 +1,40 @@
+name: 'Get Stack USNs'
+
+description: |
+  Gets list of new USNs for the stack given a list of relevant packages
+  and a list of last-known USNs.
+
+outputs:
+  usns:
+    description: JSON array of patched USNs
+
+inputs:
+  feed_url:
+    description: 'URL of RSS feed to scrape'
+    required: false
+    default: 'https://ubuntu.com/security/notices/rss.xml'
+  last_usns:
+    description: 'JSON array of last known USNs'
+    required: false
+    default: '[]'
+  packages:
+    description: 'JSON array of stack package names'
+    required: false
+    default: '[]'
+  distribution:
+    description: 'Ubuntu distribution of stack (bionic|jammy)'
+    required: false
+    default: "bionic"
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+  - "--feed-url"
+  - "${{ inputs.feed_url }}"
+  - "--last-usns"
+  - "${{ inputs.last_usns }}"
+  - "--packages"
+  - "${{ inputs.packages }}"
+  - "--distro"
+  - "${{ inputs.distribution }}"
