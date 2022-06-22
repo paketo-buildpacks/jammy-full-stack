@@ -57,7 +57,7 @@ platforms = ["linux/amd64"]
     libaudiofile-dev \
     libaudiofile1 \
     libavcodec-dev \
-    libavcodec57 \
+    libavcodec58 \
     libbabeltrace1 \
     libblas-dev \
     libblas3 \
@@ -74,7 +74,7 @@ platforms = ["linux/amd64"]
     libestr0 \
     libexif12 \
     libffi-dev \
-    libffi6 \
+    libffi8 \
     libfl-dev \
     libfl2 \
     libfribidi-dev \
@@ -92,15 +92,15 @@ platforms = ["linux/amd64"]
     libgraphviz-dev \
     libharfbuzz-icu0 \
     libicu-dev \
-    libidn11 \
+    libidn12 \
     libidn11-dev \
-    libilmbase12:amd64 \
+    libilmbase25:amd64 \
     libjson-glib-1.0-0 \
     libjson-glib-dev \
     libkrb5-dev \
     liblapack-dev \
     liblapack3 \
-    libldap-2.4-2 \
+    libldap-2.5-0 \
     libldap2-dev \
     liblockfile-bin \
     liblockfile-dev \
@@ -121,7 +121,7 @@ platforms = ["linux/amd64"]
     libnl-genl-3-dev \
     libopenblas-base \
     libopenblas-dev \
-    libopenexr22:amd64 \
+    libopenexr25:amd64 \
     liborc-0.4-0 \
     liborc-0.4-dev \
     libp11-kit-dev \
@@ -136,10 +136,10 @@ platforms = ["linux/amd64"]
     libpq5 \
     libproxy-dev \
     libproxy1v5 \
-    libpython-stdlib:amd64 \
-    libpython3.6 \
-    libreadline6-dev \
-    libreadline7 \
+    libpython3.10-stdlib:amd64 \
+    libpython3.10 \
+    libreadline-dev \
+    libreadline8 \
     librtmp-dev \
     libsasl2-2 \
     libsasl2-dev \
@@ -162,7 +162,7 @@ platforms = ["linux/amd64"]
     libterm-ui-perl \
     libtiffxx5 \
     libtirpc-dev \
-    libtirpc1:amd64 \
+    libtirpc-common:amd64 \
     libtool \
     libunwind8-dev \
     libunwind8:amd64 \
@@ -185,9 +185,9 @@ platforms = ["linux/amd64"]
     net-tools \
     ocaml-base-nox \
     openssh-client \
-    openssl1.0 \
+    openssl \
     psmisc \
-    python \
+    python3 \
     python-bzrlib \
     rsync \
     ruby \
@@ -240,7 +240,7 @@ platforms = ["linux/amd64"]
     libargon2-0 \
     libatm1 \
     libaudiofile1 \
-    libavcodec57 \
+    libavcodec58 \
     libbabeltrace1 \
     libblas3 \
     libc6 \
@@ -252,7 +252,7 @@ platforms = ["linux/amd64"]
     liberror-perl \
     libestr0 \
     libexif12 \
-    libffi6 \
+    libffi8 \
     libfl2 \
     libfribidi0 \
     libgcrypt20 \
@@ -264,13 +264,13 @@ platforms = ["linux/amd64"]
     libgnutlsxx28 \
     libgraphviz-dev \
     libharfbuzz-icu0 \
-    libidn11 \
-    libilmbase12:amd64 \
-    libisl19:amd64 \
+    libidn12 \
+    libilmbase25:amd64 \
+    libisl23:amd64 \
     libjson-glib-1.0-0 \
-    libjsoncpp1:amd64 \
+    libjsoncpp25:amd64 \
     liblapack3 \
-    libldap-2.4-2 \
+    libldap-2.5-0 \
     liblockfile-bin \
     liblockfile1 \
     libmagic1 \
@@ -283,7 +283,7 @@ platforms = ["linux/amd64"]
     libnl-3-200:amd64 \
     libnl-genl-3-200:amd64 \
     libopenblas-base \
-    libopenexr22:amd64 \
+    libopenexr25:amd64 \
     liborc-0.4-0 \
     libp11-kit0 \
     libpam-cap \
@@ -294,9 +294,9 @@ platforms = ["linux/amd64"]
     libpcre32-3 \
     libpq5 \
     libproxy1v5 \
-    libpython-stdlib:amd64 \
-    libpython3.6 \
-    libreadline7 \
+    libpython3-stdlib:amd64 \
+    libpython3.10 \
+    libreadline8 \
     librhash0:amd64 \
     libsasl2-2 \
     libsasl2-modules \
@@ -310,7 +310,7 @@ platforms = ["linux/amd64"]
     libtasn1-6 \
     libterm-ui-perl \
     libtiffxx5 \
-    libtirpc1:amd64 \
+    libtirpc-common:amd64 \
     libunwind8:amd64 \
     libustr-1.0-1 \
     libuv1:amd64 \
@@ -326,9 +326,9 @@ platforms = ["linux/amd64"]
     net-tools \
     ocaml-base-nox \
     openssh-client \
-    openssl1.0 \
+    openssl \
     psmisc \
-    python \
+    python3 \
     python-bzrlib \
     rsync \
     ruby \
