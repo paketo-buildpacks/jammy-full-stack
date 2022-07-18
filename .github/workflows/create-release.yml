@@ -34,7 +34,7 @@ jobs:
     steps:
     - name: Find and Download Previous Build Receipt
       id: previous_build
-      uses: paketo-buildpacks/jammy-full-stack/actions/find-and-download-asset@main
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
         asset_pattern: "${{ env.BUILD_RECEIPT_FILENAME }}"
         search_depth: 1
@@ -44,7 +44,7 @@ jobs:
 
     - name: Find and Download Previous Run Receipt
       id: previous_run
-      uses: paketo-buildpacks/jammy-full-stack/actions/find-and-download-asset@main
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
         asset_pattern: "${{ env.RUN_RECEIPT_FILENAME }}"
         search_depth: 1
@@ -55,14 +55,14 @@ jobs:
     - name: Get Package List
       id: packages
       if: ${{ steps.previous_build.outputs.output_path != '' && steps.previous_run.outputs.output_path != '' }}
-      uses: paketo-buildpacks/jammy-full-stack/actions/generate-package-list@main
+      uses: paketo-buildpacks/github-config/actions/stack/generate-package-list@main
       with:
         build_receipt: "${{ github.workspace }}/${{ env.BUILD_RECEIPT_FILENAME }}"
         run_receipt: "${{ github.workspace }}/${{ env.RUN_RECEIPT_FILENAME }}"
 
     - name: Find and Download Previous Patched USNs
       id: download_patched
-      uses: paketo-buildpacks/jammy-full-stack/actions/find-and-download-asset@main
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
         asset_pattern: "${{ env.PATCHED_USNS_FILENAME }}"
         search_depth: "-1"   # Search all releases
@@ -77,11 +77,20 @@ jobs:
         patched=$(jq --compact-output . < "${GITHUB_WORKSPACE}/${{ env.PATCHED_USNS_FILENAME }}")
         printf "::set-output name=patched::%s\n" "${patched}"
 
+    - name: Get Stack Distribution Name
+      id: distro
+      run: |
+        # Extract distro from repo name:
+        # paketo-buildpacks/jammy-tiny-stack --> jammy
+        distro="$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-.*$//')"
+        echo "Ubuntu distribution: ${distro}"
+        printf "::set-output name=distro::%s\n" "${distro}"
+
     - name: Get New USNs
       id: usns
-      uses: paketo-buildpacks/jammy-full-stack/actions/get-usns@main
+      uses: paketo-buildpacks/github-config/actions/stack/get-usns@main
       with:
-        distribution: 'jammy'
+        distribution: ${{ steps.distro.outputs.distro }}
         packages: ${{ steps.packages.outputs.packages }}
         last_usns: ${{ steps.patched.outputs.patched }}
 
@@ -210,7 +219,7 @@ jobs:
 
     - name: Find and Download Previous Build Receipt
       if: ${{ steps.check_previous.outputs.exists == 'true' }}
-      uses: paketo-buildpacks/jammy-full-stack/actions/find-and-download-asset@main
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
         asset_pattern: "${{ env.BUILD_RECEIPT_FILENAME }}"
         search_depth: 1
@@ -220,7 +229,7 @@ jobs:
 
     - name: Find and Download Previous Run Receipt
       if: ${{ steps.check_previous.outputs.exists == 'true' }}
-      uses: paketo-buildpacks/jammy-full-stack/actions/find-and-download-asset@main
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
       with:
         asset_pattern: "${{ env.RUN_RECEIPT_FILENAME }}"
         search_depth: 1
@@ -230,14 +239,14 @@ jobs:
 
     - name: Compare Build Packages
       id: build_diff
-      uses: paketo-buildpacks/jammy-full-stack/actions/diff-package-receipts@main
+      uses: paketo-buildpacks/github-config/actions/stack/diff-package-receipts@main
       with:
         previous: "/github/workspace/previous-${{ env.BUILD_RECEIPT_FILENAME }}"
         current: "/github/workspace/${{ env.BUILD_RECEIPT_FILENAME }}"
 
     - name: Compare Run Packages
       id: run_diff
-      uses: paketo-buildpacks/jammy-full-stack/actions/diff-package-receipts@main
+      uses: paketo-buildpacks/github-config/actions/stack/diff-package-receipts@main
       with:
         previous: "/github/workspace/previous-${{ env.RUN_RECEIPT_FILENAME }}"
         current: "/github/workspace/${{ env.RUN_RECEIPT_FILENAME }}"
@@ -414,18 +423,6 @@ jobs:
         USNS_PATH: "${{ env.PATCHED_USNS_FILENAME }}"
         USNS: ${{ needs.poll_usns.outputs.usns }}
 
-    - name: Create Release Notes
-      id: notes
-      uses: paketo-buildpacks/jammy-full-stack/actions/release-notes@main
-      with:
-        build_image: "paketobuildpacks/build-jammy-full:${{ steps.tag.outputs.tag }}"
-        run_image: "paketobuildpacks/run-jammy-full:${{ steps.tag.outputs.tag }}"
-        build_packages_added: ${{ needs.diff.outputs.build_added }}
-        build_packages_modified: ${{ needs.diff.outputs.build_modified }}
-        run_packages_added: ${{ needs.diff.outputs.run_added }}
-        run_packages_modified: ${{ needs.diff.outputs.run_modified }}
-        patched_usns: ${{ needs.poll_usns.outputs.usns }}
-
     - name: Get Repository Name
       id: repo_name
       run: |
@@ -433,10 +430,74 @@ jobs:
         # Strip off the org and slash from repo name
         # paketo-buildpacks/repo-name --> repo-name
         repo=$(echo "${full}" | sed 's/^.*\///')
-        echo "::set-output name=repo_name::${repo}"
+        echo "::set-output name=github_repo_name::${repo}"
 
-    - name: Create Release (with patched USNs)
-      if: ${{ steps.write_usns.outputs.usns != '' }}
+        # Strip off 'stack' suffix from repo name
+        # some-name-stack --> some-name
+        registry_repo="${repo//-stack/}"
+        echo "::set-output name=registry_repo_name::${registry_repo}"
+
+
+    - name: Create Release Notes
+      id: notes
+      uses: paketo-buildpacks/github-config/actions/stack/release-notes@main
+      with:
+        build_image: "paketobuildpacks/build-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+        run_image: "paketobuildpacks/run-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+        build_packages_added: ${{ needs.diff.outputs.build_added }}
+        build_packages_modified: ${{ needs.diff.outputs.build_modified }}
+        run_packages_added: ${{ needs.diff.outputs.run_added }}
+        run_packages_modified: ${{ needs.diff.outputs.run_modified }}
+        patched_usns: ${{ needs.poll_usns.outputs.usns }}
+
+    - name: Setup Release Assets
+      id: assets
+      run: |
+        assets="$(jq --null-input --compact-output \
+          --arg tag "${{ steps.tag.outputs.tag }}" \
+          --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
+          --arg build_receipt "${{ env.BUILD_RECEIPT_FILENAME }}" \
+          --arg run_receipt "${{ env.RUN_RECEIPT_FILENAME }}" \
+          '[
+            {
+              "path": "build.oci",
+              "name": ($repo + "-" + $tag + "-" + "build.oci"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": "run.oci",
+              "name": ($repo + "-" + $tag + "-" + "run.oci"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": $build_receipt,
+              "name": ($repo + "-" + $tag + "-" + $build_receipt),
+              "content_type": "text/plain"
+            },
+            {
+              "path": $run_receipt,
+              "name": ($repo + "-" + $tag + "-" + $run_receipt),
+              "content_type": "text/plain"
+            }]')"
+
+        if [ -n "${{ steps.write_usns.outputs.usns }}" ]; then
+          assets="$(jq --compact-output \
+            --arg tag "${{ steps.tag.outputs.tag }}" \
+            --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
+            --arg usn_path "${{ steps.write_usns.outputs.usns }}" \
+            --arg usn_name "${{ env.PATCHED_USNS_FILENAME }}" \
+            '. += [
+            {
+              "path": $usn_path,
+              "name": ($repo + "-" + $tag + "-" + $usn_name),
+              "content_type": "text/plain"
+            }
+          ]' <<< "${assets}")"
+        fi
+
+        printf "::set-output name=assets::%s\n" "${assets}"
+
+    - name: Create Release
       uses: paketo-buildpacks/github-config/actions/release/create@main
       with:
         repo: ${{ github.repository }}
@@ -446,69 +507,7 @@ jobs:
         name: v${{ steps.tag.outputs.tag }}
         body: ${{ steps.notes.outputs.release_body }}
         draft: false
-        assets: |
-          [
-            {
-              "path": "build.oci",
-              "name": "${{ steps.repo_name.outputs.repo_name }}-${{ steps.tag.outputs.tag }}-build.oci",
-              "content_type": "application/gzip"
-            },
-            {
-              "path": "run.oci",
-              "name": "${{ steps.repo_name.outputs.repo_name }}-${{ steps.tag.outputs.tag }}-run.oci",
-              "content_type": "application/gzip"
-            },
-            {
-              "path": "${{ env.BUILD_RECEIPT_FILENAME }}",
-              "name": "${{ steps.repo_name.outputs.repo_name }}-${{ steps.tag.outputs.tag }}-${{ env.BUILD_RECEIPT_FILENAME }}",
-              "content_type": "text/plain"
-            },
-            {
-              "path": "${{ env.RUN_RECEIPT_FILENAME }}",
-              "name": "${{ steps.repo_name.outputs.repo_name }}-${{ steps.tag.outputs.tag }}-${{ env.RUN_RECEIPT_FILENAME }}",
-              "content_type": "text/plain"
-            },
-            {
-              "path": "${{ steps.write_usns.outputs.usns }}",
-              "name": "${{ steps.repo_name.outputs.repo_name }}-${{ steps.tag.outputs.tag }}-${{ env.PATCHED_USNS_FILENAME }}",
-              "content_type": "text/plain"
-            }
-          ]
-
-    - name: Create Release (without patched USNs)
-      if: ${{ steps.write_usns.outputs.usns == '' }}
-      uses: paketo-buildpacks/github-config/actions/release/create@main
-      with:
-        repo: ${{ github.repository }}
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-        tag_name: v${{ steps.tag.outputs.tag }}
-        target_commitish: ${{ github.sha }}
-        name: v${{ steps.tag.outputs.tag }}
-        body: ${{ steps.notes.outputs.release_body }}
-        draft: false
-        assets: |
-          [
-            {
-              "path": "build.oci",
-              "name": "${{ steps.repo_name.outputs.repo_name }}-${{ steps.tag.outputs.tag }}-build.oci",
-              "content_type": "application/gzip"
-            },
-            {
-              "path": "run.oci",
-              "name": "${{ steps.repo_name.outputs.repo_name }}-${{ steps.tag.outputs.tag }}-run.oci",
-              "content_type": "application/gzip"
-            },
-            {
-              "path": "${{ env.BUILD_RECEIPT_FILENAME }}",
-              "name": "${{ steps.repo_name.outputs.repo_name }}-${{ steps.tag.outputs.tag }}-${{ env.BUILD_RECEIPT_FILENAME }}",
-              "content_type": "text/plain"
-            },
-            {
-              "path": "${{ env.RUN_RECEIPT_FILENAME }}",
-              "name": "${{ steps.repo_name.outputs.repo_name }}-${{ steps.tag.outputs.tag }}-${{ env.RUN_RECEIPT_FILENAME }}",
-              "content_type": "text/plain"
-            }
-          ]
+        assets: ${{ steps.assets.outputs.assets }}
 
   failure:
     name: Alert on Failure
@@ -516,22 +515,16 @@ jobs:
     needs: [poll_usns, create_stack, diff, test, release, packages_changed, stack_files_changed]
     if: ${{ always() && needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
-
-    - name: File Issue
-      run: |
-        gh auth status
-
-        release_issue=$(gh issue list --json number --label release-issue --jq .[0].number)
-        if [ -z "${release_issue}" ]; \
-        then gh issue create \
-        --title "Failure: create-release workflow" \
-        --label "release-issue" \
-        --body "[Create release workflow](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}) failed to run. Please take a look to ensure CVE patches can be released. (cc @paketo-buildpacks/stacks-maintainers)" \
-        -R ${{github.repository}}; \
-        else gh issue comment "${release_issue}" --body "Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"; \
-        fi
-        echo "${release_issue}"
-      env:
-        GITHUB_TOKEN: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+    - name: File Failure Alert Issue
+      uses: paketo-buildpacks/github-config/actions/issue/file@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repo: ${{ github.repository }}
+        label: "failure:release"
+        comment_if_exists: true
+        issue_title: "Failure: Create Release workflow"
+        issue_body: |
+          Create Release workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
+          Please take a look to ensure CVE patches can be released. (cc @paketo-buildpacks/stacks-maintainers).
+        comment_body: |
+          Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
