@@ -172,7 +172,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 
 			Expect(image).To(SatisfyAll(
 				HaveFileWithContent("/etc/group", ContainSubstring("cnb:x:1000:")),
-				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1002:1000::/home/cnb:/sbin/nologin")),
+				HaveFileWithContent("/etc/passwd", ContainSubstring("cnb:x:1002:1000::/home/cnb:/bin/bash")),
 				HaveDirectory("/home/cnb"),
 			))
 
