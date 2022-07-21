@@ -1,4 +1,4 @@
-id = "io.buildpacks.stacks.jammy.full"
+id = "io.buildpacks.stacks.jammy"
 homepage = "https://github.com/paketo-buildpacks/jammy-full-stack"
 maintainer = "Paketo Buildpacks"
 

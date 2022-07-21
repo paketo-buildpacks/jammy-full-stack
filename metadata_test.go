@@ -70,7 +70,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(file.Config.Labels).To(SatisfyAll(
-				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.jammy.full"),
+				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.jammy"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "ubuntu:jammy with compilers and common libraries and utilities"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "ubuntu"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.version", "22.04"),
@@ -94,7 +94,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			Expect(file.Config.Env).To(ContainElements(
 				"CNB_USER_ID=1001",
 				"CNB_GROUP_ID=1000",
-				"CNB_STACK_ID=io.buildpacks.stacks.jammy.full",
+				"CNB_STACK_ID=io.buildpacks.stacks.jammy",
 			))
 
 			Expect(image).To(HaveFileWithContent("/etc/gitconfig", ContainLines(
@@ -266,7 +266,7 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(file.Config.Labels).To(SatisfyAll(
-				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.jammy.full"),
+				HaveKeyWithValue("io.buildpacks.stack.id", "io.buildpacks.stacks.jammy"),
 				HaveKeyWithValue("io.buildpacks.stack.description", "ubuntu:jammy with common libraries and utilities"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.name", "ubuntu"),
 				HaveKeyWithValue("io.buildpacks.stack.distro.version", "22.04"),

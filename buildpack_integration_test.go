@@ -71,7 +71,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 
 [stack]
   build-image = "%s:latest"
-  id = "io.buildpacks.stacks.jammy.full"
+  id = "io.buildpacks.stacks.jammy"
   run-image = "%s:latest"
 `,
 			lifecycleVersion,
