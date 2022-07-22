@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,8 +17,6 @@ import (
 	. "github.com/paketo-buildpacks/occam/matchers"
 	"github.com/paketo-buildpacks/packit/v2/pexec"
 )
-
-const lifecycleVersion = "0.14.0"
 
 func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 	var (
@@ -66,21 +65,15 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		builderConfigFilepath = builderConfigFile.Name()
 
 		_, err = fmt.Fprintf(builderConfigFile, `
-[lifecycle]
-  version = "%s"
-
 [stack]
   build-image = "%s:latest"
   id = "io.buildpacks.stacks.jammy"
   run-image = "%s:latest"
 `,
-			lifecycleVersion,
 			stack.BuildImageID,
 			stack.RunImageID,
 		)
 		Expect(err).NotTo(HaveOccurred())
-
-		Expect(docker.Pull.Execute(fmt.Sprintf("buildpacksio/lifecycle:%s", lifecycleVersion))).To(Succeed())
 
 		Expect(archiveToDaemon(stack.BuildArchive, stack.BuildImageID)).To(Succeed())
 		Expect(archiveToDaemon(stack.RunArchive, stack.RunImageID)).To(Succeed())
@@ -95,11 +88,16 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		Expect(docker.Image.Remove.Execute(image.ID)).To(Succeed())
 		Expect(docker.Volume.Remove.Execute(occam.CacheVolumeNames(name))).To(Succeed())
 
+		lifecycleVersion, err := getLifecycleVersion(builder)
+		Expect(err).NotTo(HaveOccurred())
+
 		Expect(docker.Image.Remove.Execute(builder)).To(Succeed())
 		Expect(os.RemoveAll(builderConfigFilepath)).To(Succeed())
 
 		Expect(docker.Image.Remove.Execute(stack.BuildImageID)).To(Succeed())
 		Expect(docker.Image.Remove.Execute(stack.RunImageID)).To(Succeed())
+
+		Expect(docker.Image.Remove.Execute(fmt.Sprintf("buildpacksio/lifecycle:%s", lifecycleVersion))).To(Succeed())
 
 		Expect(os.RemoveAll(source)).To(Succeed())
 	})
@@ -109,7 +107,6 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		var err error
 		var logs fmt.Stringer
 		image, logs, err = pack.WithNoColor().Build.
-			WithPullPolicy("never").
 			WithBuildpacks(
 				goDistBuildpack,
 				buildPlanBuildpack,
@@ -117,6 +114,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			WithEnv(map[string]string{
 				"BP_LOG_LEVEL": "DEBUG",
 			}).
+			WithPullPolicy("if-not-present").
 			WithBuilder(builder).
 			Execute(name, source)
 		Expect(err).ToNot(HaveOccurred(), logs.String)
@@ -163,4 +161,39 @@ func createBuilder(config string, name string) (string, error) {
 		},
 	})
 	return buf.String(), err
+}
+
+type Builder struct {
+	LocalInfo struct {
+		Lifecycle struct {
+			Version string `json:"version"`
+		} `json:"lifecycle"`
+	} `json:"local_info"`
+}
+
+func getLifecycleVersion(builderID string) (string, error) {
+	buf := bytes.NewBuffer(nil)
+	pack := pexec.NewExecutable("pack")
+	err := pack.Execute(pexec.Execution{
+		Stdout: buf,
+		Stderr: buf,
+		Args: []string{
+			"builder",
+			"inspect",
+			builderID,
+			"-o",
+			"json",
+		},
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	var builder Builder
+	err = json.Unmarshal([]byte(buf.String()), &builder)
+	if err != nil {
+		return "", err
+	}
+	return builder.LocalInfo.Lifecycle.Version, nil
 }
