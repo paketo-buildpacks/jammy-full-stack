@@ -23,9 +23,6 @@ jobs:
       with:
         swap-size-gb: 10
 
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
-
     - name: Run Acceptance Tests
       run: ./scripts/test.sh --clean
 
