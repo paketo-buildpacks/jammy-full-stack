@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+function main() {
+  local depth pattern repo strict
+  while [[ "${#}" != 0 ]]; do
+    case "${1}" in
+      --depth)
+        depth="${2}"
+        shift 2
+        ;;
+
+      --pattern)
+        pattern="${2}"
+        shift 2
+        ;;
+
+      --repo)
+        repo="${2}"
+        shift 2
+        ;;
+
+      --strict)
+        strict="${2}"
+        shift 2
+        ;;
+
+      "")
+        # skip if the argument is empty
+        shift 1
+        ;;
+
+      *)
+        echo "Unknown argument" "$@"
+        exit 1
+    esac
+  done
+
+  if [[ -z "${GITHUB_TOKEN}" ]]; then
+    echo "Must set \$GITHUB_TOKEN"
+    exit 1
+  fi
+
+  gh auth status
+
+  find_asset "${repo}" "${depth}" "${pattern}" "${strict}"
+}
+
+function find_asset() {
+  local repo depth pattern strict
+  repo="${1}"
+  depth="${2}"
+  pattern="${3}"
+  strict="${4}"
+  url=$(gh api "repos/${repo}/releases"  \
+    --method GET \
+    --paginate \
+    | jq -r \
+    --arg pattern "${pattern}" \
+    --argjson depth "${depth}" \
+    '[ limit($depth; .[] | select( .draft == false )) | .assets | .[] | select(.name | test($pattern)) | .browser_download_url][0]' )
+
+  if [[ "${url}" == "null" ]]; then
+      if [[ "${strict}" == "true" ]]; then
+        echo "No matching asset found."
+        exit 1
+      fi
+    url=""
+  fi
+  echo "Asset URL is: " "${url}"
+
+  printf "::set-output name=url::%s\n" "${url}"
+}
+
+main "${@:-}"
+

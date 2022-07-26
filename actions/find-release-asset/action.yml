@@ -1,0 +1,37 @@
+name: "Find Release Asset"
+description: |
+  Searches the most recent N releases to find an asset that matches the
+  inputted glob. Requires $GITHUB_TOKEN environment variable to be set
+
+inputs:
+  repo:
+    description: 'Repository whose assets to search'
+    required: true
+  asset_pattern:
+    description: 'Name/regular expression matching desired asset file'
+    required: true
+  search_depth:
+    description: 'Number of past releases to traverse (from most recent to least). If -1, searches all.'
+    required: false
+    default: '-1'
+  strict:
+    description: 'Boolean. If true, the action fails if no matching asset is found'
+    required: false
+    default: false
+outputs:
+  asset_url:
+    description: 'Download URL of the first matching asset'
+    value: ${{ steps.asset.outputs.url }}
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+  - "--repo"
+  - "${{ inputs.repo }}"
+  - "--depth"
+  - "${{ inputs.search_depth }}"
+  - "--pattern"
+  - "${{ inputs.asset_pattern }}"
+  - "--strict"
+  - "${{ inputs.strict }}"

@@ -1,0 +1,50 @@
+name: 'Create Release Notes'
+
+description: |
+  Creates release notes for a stack in Markdown format
+
+outputs:
+  release_body:
+    description: Generated detailed release notes for the stack
+
+inputs:
+  build_image:
+    description: 'Image registry location of build image'
+    required: true
+  run_image:
+    description: 'Image registry location of run image'
+    required: true
+  build_packages_added:
+    description: 'JSON array of packages added "{ name: name, version: 1.2.3 }"'
+    required: false
+  build_packages_modified:
+    description: 'JSON array of packages modified "{ name: name, previousVersion: 1.2.3, currentVersion: 1.2.4 }"'
+    required: false
+  run_packages_added:
+    description: 'JSON array of packages added "{ name: name, version: 1.2.3 }"'
+    required: false
+  run_packages_modified:
+    description: 'JSON array of packages modified "{ name: name, previousVersion: 1.2.3, currentVersion: 1.2.4 }"'
+    required: false
+  patched_usns:
+    description: 'JSON array of objects "{ name: USN name, url: USN URL, description: USN description}"'
+    required: false
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+  - "--build-image"
+  - "${{ inputs.build_image }}"
+  - "--run-image"
+  - "${{ inputs.run_image }}"
+  - "--patched-usns"
+  - "${{ inputs.patched_usns }}"
+  - "--build-added"
+  - "${{ inputs.build_packages_added }}"
+  - "--build-modified"
+  - "${{ inputs.build_packages_modified }}"
+  - "--run-added"
+  - "${{ inputs.run_packages_added }}"
+  - "--run-modified"
+  - "${{ inputs.run_packages_modified }}"

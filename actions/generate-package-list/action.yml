@@ -1,0 +1,27 @@
+name: 'Generate Package List'
+description: 'Generates a list of packages (without versions) given a dpkg -l style package receipt'
+inputs:
+  build_receipt:
+    description: 'Package receipt for build image'
+    required: true
+  run_receipt:
+    description: 'Package receipt for run image'
+    required: true
+outputs:
+  packages:
+    description: 'JSON array of packages contained in build and run images'
+    value: ${{ steps.packages.outputs.packages }}
+
+runs:
+  using: 'composite'
+  steps:
+  - id: packages
+    shell: bash
+    run: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      packages=$(jq  '.components[] |  .name' "${{ inputs.build_receipt }}" "${{ inputs.run_receipt }}" \
+        | jq --null-input --compact-output '[inputs]')
+
+      printf "::set-output name=packages::%s\n" "${packages}"

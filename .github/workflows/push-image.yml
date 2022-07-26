@@ -1,0 +1,75 @@
+name: Push Stack Image
+
+on:
+  release:
+    types:
+    - published
+
+jobs:
+  push:
+    name: Push
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Parse Event
+      id: event
+      run: |
+        echo "::set-output name=tag::$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)"
+        echo "::set-output name=build_download_url::$(jq -r '.release.assets[] | select(.name | endswith("build.oci")) | .url' "${GITHUB_EVENT_PATH}")"
+        echo "::set-output name=run_download_url::$(jq -r '.release.assets[] | select(.name | endswith("run.oci")) | .url' "${GITHUB_EVENT_PATH}")"
+
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Download Build Image
+      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
+      with:
+        url: ${{ steps.event.outputs.build_download_url }}
+        output: "/github/workspace/build.oci"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Download Run Image
+      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
+      with:
+        url: ${{ steps.event.outputs.run_download_url }}
+        output: "/github/workspace/run.oci"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Push to DockerHub
+      id: push
+      env:
+        DOCKERHUB_USERNAME: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
+        DOCKERHUB_PASSWORD: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_PASSWORD }}
+        DOCKERHUB_ORG: "paketobuildpacks"
+      run: |
+        echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
+
+        # Strip off the Github org prefix and 'stack' suffix from repo name
+        # paketo-buildpacks/some-name-stack --> some-name
+        registry_repo=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')
+
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${registry_repo}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${registry_repo}:latest"
+
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${registry_repo}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${registry_repo}:latest"
+
+  failure:
+    name: Alert on Failure
+    runs-on: ubuntu-latest
+    needs: [push]
+    if: ${{ always() && needs.push.result == 'failure' }}
+    steps:
+    - name: File Failure Alert Issue
+      uses: paketo-buildpacks/github-config/actions/issue/file@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repo: ${{ github.repository }}
+        label: "failure:push"
+        comment_if_exists: true
+        issue_title: "Failure: Push Image workflow"
+        issue_body: |
+          Push Image workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
+          Please take a look to ensure CVE patches can be released. (cc @paketo-buildpacks/stacks-maintainers).
+        comment_body: |
+           Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}

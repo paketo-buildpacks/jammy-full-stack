@@ -1,0 +1,530 @@
+name: Create Release
+
+on:
+  schedule:
+  - cron: '*/10 * * * *'  # every 10 minutes
+  push:
+    branches:
+    - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version of the release to cut (e.g. 1.2.3)'
+        required: false
+      force:
+        description: 'Release stack even if change validator does not detect changes'
+        required: true
+        type: choice
+        default: 'false'
+        options:
+        - 'true'
+        - 'false'
+
+concurrency: release
+env:
+  BUILD_RECEIPT_FILENAME: "build-receipt.cyclonedx.json"
+  RUN_RECEIPT_FILENAME: "run-receipt.cyclonedx.json"
+  PATCHED_USNS_FILENAME: "patched-usns.json"
+jobs:
+  poll_usns:
+    name: Poll USNs
+    runs-on: ubuntu-latest
+    outputs:
+      usns: ${{ steps.usns.outputs.usns }}
+    steps:
+    - name: Find and Download Previous Build Receipt
+      id: previous_build
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ env.BUILD_RECEIPT_FILENAME }}"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/${{ env.BUILD_RECEIPT_FILENAME }}"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Find and Download Previous Run Receipt
+      id: previous_run
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ env.RUN_RECEIPT_FILENAME }}"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/${{ env.RUN_RECEIPT_FILENAME }}"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Get Package List
+      id: packages
+      if: ${{ steps.previous_build.outputs.output_path != '' && steps.previous_run.outputs.output_path != '' }}
+      uses: paketo-buildpacks/github-config/actions/stack/generate-package-list@main
+      with:
+        build_receipt: "${{ github.workspace }}/${{ env.BUILD_RECEIPT_FILENAME }}"
+        run_receipt: "${{ github.workspace }}/${{ env.RUN_RECEIPT_FILENAME }}"
+
+    - name: Find and Download Previous Patched USNs
+      id: download_patched
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ env.PATCHED_USNS_FILENAME }}"
+        search_depth: "-1"   # Search all releases
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/${{ env.PATCHED_USNS_FILENAME }}"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Output Patched USNs as JSON String
+      id: patched
+      if: ${{ steps.download_patched.outputs.output_path != '' }}
+      run: |
+        patched=$(jq --compact-output . < "${GITHUB_WORKSPACE}/${{ env.PATCHED_USNS_FILENAME }}")
+        printf "::set-output name=patched::%s\n" "${patched}"
+
+    - name: Get Stack Distribution Name
+      id: distro
+      run: |
+        # Extract distro from repo name:
+        # paketo-buildpacks/jammy-tiny-stack --> jammy
+        distro="$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-.*$//')"
+        echo "Ubuntu distribution: ${distro}"
+        printf "::set-output name=distro::%s\n" "${distro}"
+
+    - name: Get New USNs
+      id: usns
+      uses: paketo-buildpacks/github-config/actions/stack/get-usns@main
+      with:
+        distribution: ${{ steps.distro.outputs.distro }}
+        packages: ${{ steps.packages.outputs.packages }}
+        last_usns: ${{ steps.patched.outputs.patched }}
+
+  stack_files_changed:
+    name: Determine If Stack Files Changed
+    runs-on: ubuntu-latest
+    needs: poll_usns
+    if: ${{ ! ( needs.poll_usns.outputs.usns == '[]' && github.event_name == 'schedule' ) }}
+    outputs:
+      stack_files_changed: ${{ steps.compare.outputs.stack_files_changed }}
+    steps:
+    - name: Checkout With History
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # gets full history
+
+    - name: Compare With Previous Release
+      id: compare
+      run: |
+        # shellcheck disable=SC2046
+        changed="$(git diff --name-only $(git describe --tags --abbrev=0) -- stack)"
+        if [ -z "${changed}" ]
+        then
+          echo "No relevant files changed since previous release."
+          echo "::set-output name=stack_files_changed::false"
+        else
+          echo "Relevant files have changed since previous release."
+          echo "${changed}"
+          echo "::set-output name=stack_files_changed::true"
+        fi
+
+  run_if_stack_files_changed:
+    name: Run If Stack Files Changed
+    runs-on: ubuntu-latest
+    needs: [stack_files_changed]
+    if: ${{ needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
+    steps:
+    - name: Run if stack files changed
+      run: |
+        echo "stack files have changed"
+
+  create_stack:
+    name: Create Stack
+    needs: poll_usns
+    if: ${{ ! ( needs.poll_usns.outputs.usns == '[]' && github.event_name == 'schedule' ) }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Create stack
+      run: ./scripts/create.sh
+
+    - name: Generate Package Receipts
+      id: receipts
+      run: |
+        scripts/receipts.sh --build-archive "${GITHUB_WORKSPACE}/build/build.oci" \
+                            --run-archive "${GITHUB_WORKSPACE}/build/run.oci" \
+                            --build-receipt ${{ env.BUILD_RECEIPT_FILENAME }} \
+                            --run-receipt ${{ env.RUN_RECEIPT_FILENAME }}
+        echo "::set-output name=build_receipt::${{ env.BUILD_RECEIPT_FILENAME }}"
+        echo "::set-output name=run_receipt::${{ env.RUN_RECEIPT_FILENAME }}"
+
+    - name: Upload run image
+      uses: actions/upload-artifact@v3
+      with:
+        name: current-run-image
+        path: build/run.oci
+
+    - name: Upload build image
+      uses: actions/upload-artifact@v3
+      with:
+        name: current-build-image
+        path: build/build.oci
+
+    - name: Upload Build receipt
+      uses: actions/upload-artifact@v3
+      with:
+        name: current-build-receipt
+        path: ${{ steps.receipts.outputs.build_receipt }}
+
+    - name: Upload Run receipt
+      uses: actions/upload-artifact@v3
+      with:
+        name: current-run-receipt
+        path: ${{ steps.receipts.outputs.run_receipt }}
+
+  diff:
+    name: Diff Packages
+    outputs:
+      build_added: ${{ steps.build_diff.outputs.added }}
+      build_modified: ${{ steps.build_diff.outputs.modified }}
+      run_added: ${{ steps.run_diff.outputs.added }}
+      run_modified: ${{ steps.run_diff.outputs.modified }}
+    needs: [ create_stack ]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download Build Receipt
+      uses: actions/download-artifact@v3
+      with:
+        name: current-build-receipt
+
+    - name: Download Run Receipt
+      uses: actions/download-artifact@v3
+      with:
+        name: current-run-receipt
+
+    - name: Check for Previous Releases
+      id: check_previous
+      run: |
+        gh auth status
+        # shellcheck disable=SC2046
+        if [ $(gh api "/repos/${{ github.repository }}/releases" | jq -r 'length') -eq 0 ]; then
+          echo "::set-output name=exists::false"
+          exit 0
+        fi
+        echo "::set-output name=exists::true"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Write Empty Previous Receipts
+      if: ${{ steps.check_previous.outputs.exists == 'false' }}
+      run: |
+        echo '{"components":[]}' > "${{ github.workspace }}/previous-${{ env.BUILD_RECEIPT_FILENAME }}"
+        echo '{"components":[]}' > "${{ github.workspace }}/previous-${{ env.RUN_RECEIPT_FILENAME }}"
+
+    - name: Find and Download Previous Build Receipt
+      if: ${{ steps.check_previous.outputs.exists == 'true' }}
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ env.BUILD_RECEIPT_FILENAME }}"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/previous-${{ env.BUILD_RECEIPT_FILENAME }}"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Find and Download Previous Run Receipt
+      if: ${{ steps.check_previous.outputs.exists == 'true' }}
+      uses: paketo-buildpacks/github-config/actions/release/find-and-download-asset@main
+      with:
+        asset_pattern: "${{ env.RUN_RECEIPT_FILENAME }}"
+        search_depth: 1
+        repo: ${{ github.repository }}
+        output_path: "/github/workspace/previous-${{ env.RUN_RECEIPT_FILENAME }}"
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+
+    - name: Compare Build Packages
+      id: build_diff
+      uses: paketo-buildpacks/github-config/actions/stack/diff-package-receipts@main
+      with:
+        previous: "/github/workspace/previous-${{ env.BUILD_RECEIPT_FILENAME }}"
+        current: "/github/workspace/${{ env.BUILD_RECEIPT_FILENAME }}"
+
+    - name: Compare Run Packages
+      id: run_diff
+      uses: paketo-buildpacks/github-config/actions/stack/diff-package-receipts@main
+      with:
+        previous: "/github/workspace/previous-${{ env.RUN_RECEIPT_FILENAME }}"
+        current: "/github/workspace/${{ env.RUN_RECEIPT_FILENAME }}"
+
+    - name: Fail If Packages Removed
+      run: |
+         build=$(jq '. | length' <<< "${BUILD_REMOVED}")
+         echo "Build packages removed: ${build}"
+
+         run=$(jq '. | length' <<< "${RUN_REMOVED}")
+         echo "Run packages removed: ${run}"
+
+         if [ "${build}" -gt 0 ] || [ "${run}" -gt 0 ]; then
+           echo "Packages removed. Stack cannot be released."
+           exit 1
+         fi
+      env:
+        BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
+        RUN_REMOVED: ${{ steps.run_diff.outputs.removed }}
+
+  packages_changed:
+    name: Determine If Packages Changed
+    needs: [ diff ]
+    runs-on: ubuntu-latest
+    outputs:
+      packages_changed: ${{ steps.compare.outputs.packages_changed }}
+    steps:
+    - name: Compare With Previous Release
+      id: compare
+      run: |
+        # shellcheck disable=SC2153
+        build_added=$(jq '. | length' <<< "${BUILD_ADDED}")
+        echo "Build packages added: ${build_added}"
+
+        # shellcheck disable=SC2153
+        build_modified=$(jq '. | length' <<< "${BUILD_MODIFIED}")
+        echo "Build packages modified: ${build_added}"
+
+        # shellcheck disable=SC2153
+        run_added=$(jq '. | length' <<< "${RUN_ADDED}")
+        echo "Run packages added: ${run_added}"
+
+        # shellcheck disable=SC2153
+        run_modified=$(jq '. | length' <<< "${RUN_MODIFIED}")
+        echo "Run packages added: ${run_added}"
+
+        if [ "${build_added}" -eq 0 ] && [ "${build_modified}" -eq 0 ] && [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
+          echo "No packages changed."
+          echo "::set-output name=packages_changed::false"
+        else
+          echo "Packages changed."
+          echo "::set-output name=packages_changed::true"
+        fi
+
+      env:
+        BUILD_ADDED: ${{ needs.diff.outputs.build_added }}
+        BUILD_MODIFIED: ${{ needs.diff.outputs.build_modified }}
+        RUN_ADDED: ${{ needs.diff.outputs.run_added }}
+        RUN_MODIFIED: ${{ needs.diff.outputs.run_modified }}
+
+  run_if_packages_changed:
+    name: Run If Packages Changed
+    runs-on: ubuntu-latest
+    needs: [packages_changed]
+    if: ${{ needs.packages_changed.outputs.packages_changed == 'true' }}
+    steps:
+    - name: Run if packages changed
+      run: |
+        echo "packages have changed"
+
+  test:
+    name: Acceptance Test
+    needs: [ create_stack ]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18.x
+
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Create OCI artifacts destination directory
+      run: |
+        mkdir -p build
+
+    - name: Download Build Image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-build-image
+        path: build
+
+    - name: Download Run Image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-run-image
+        path: build
+
+    - name: Run Acceptance Tests
+      run: ./scripts/test.sh
+
+  force_release_creation:
+    name: Force Release Creation
+    runs-on: ubuntu-latest
+    if: ${{github.event.inputs.force == 'true'}}
+    steps:
+    - name: Signal force release creation
+      run: |
+        echo "Force release creation input set to true"
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [poll_usns, create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, test, force_release_creation ]
+    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    steps:
+    - name: Print Release Reasoning
+      run: |
+        printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
+        printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
+        printf "Run If Packages Changed: %s\n" "${{ needs.run_if_packages_changed.result }}"
+        printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
+        printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
+
+    - name: Checkout With History
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # gets full history
+
+    - name: Download current build image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-build-image
+
+    - name: Download current run image
+      uses: actions/download-artifact@v3
+      with:
+        name: current-run-image
+
+    - name: Download Build Receipt
+      uses: actions/download-artifact@v3
+      with:
+        name: current-build-receipt
+
+    - name: Download Run Receipt
+      uses: actions/download-artifact@v3
+      with:
+        name: current-run-receipt
+
+    - name: Increment Tag
+      if: github.event.inputs.version == ''
+      id: semver
+      uses: paketo-buildpacks/github-config/actions/tag/increment-tag@main
+      with:
+        allow_head_tagged: true
+
+    - name: Set Release Tag
+      id: tag
+      run: |
+        tag="${{ github.event.inputs.version }}"
+        if [ -z "${tag}" ]; then
+          tag="${{ steps.semver.outputs.tag }}"
+        fi
+        echo "::set-output name=tag::${tag}"
+
+    - name: Write USNs File
+      id: write_usns
+      if: ${{ needs.poll_usns.outputs.usns != '[]'  }}
+      run: |
+        jq . <<< "${USNS}" > "${USNS_PATH}"
+        echo "::set-output name=usns::${USNS_PATH}"
+      env:
+        USNS_PATH: "${{ env.PATCHED_USNS_FILENAME }}"
+        USNS: ${{ needs.poll_usns.outputs.usns }}
+
+    - name: Get Repository Name
+      id: repo_name
+      run: |
+        full=${{ github.repository }}
+        # Strip off the org and slash from repo name
+        # paketo-buildpacks/repo-name --> repo-name
+        repo=$(echo "${full}" | sed 's/^.*\///')
+        echo "::set-output name=github_repo_name::${repo}"
+
+        # Strip off 'stack' suffix from repo name
+        # some-name-stack --> some-name
+        registry_repo="${repo//-stack/}"
+        echo "::set-output name=registry_repo_name::${registry_repo}"
+
+
+    - name: Create Release Notes
+      id: notes
+      uses: paketo-buildpacks/github-config/actions/stack/release-notes@main
+      with:
+        build_image: "paketobuildpacks/build-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+        run_image: "paketobuildpacks/run-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
+        build_packages_added: ${{ needs.diff.outputs.build_added }}
+        build_packages_modified: ${{ needs.diff.outputs.build_modified }}
+        run_packages_added: ${{ needs.diff.outputs.run_added }}
+        run_packages_modified: ${{ needs.diff.outputs.run_modified }}
+        patched_usns: ${{ needs.poll_usns.outputs.usns }}
+
+    - name: Setup Release Assets
+      id: assets
+      run: |
+        assets="$(jq --null-input --compact-output \
+          --arg tag "${{ steps.tag.outputs.tag }}" \
+          --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
+          --arg build_receipt "${{ env.BUILD_RECEIPT_FILENAME }}" \
+          --arg run_receipt "${{ env.RUN_RECEIPT_FILENAME }}" \
+          '[
+            {
+              "path": "build.oci",
+              "name": ($repo + "-" + $tag + "-" + "build.oci"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": "run.oci",
+              "name": ($repo + "-" + $tag + "-" + "run.oci"),
+              "content_type": "application/gzip"
+            },
+            {
+              "path": $build_receipt,
+              "name": ($repo + "-" + $tag + "-" + $build_receipt),
+              "content_type": "text/plain"
+            },
+            {
+              "path": $run_receipt,
+              "name": ($repo + "-" + $tag + "-" + $run_receipt),
+              "content_type": "text/plain"
+            }]')"
+
+        if [ -n "${{ steps.write_usns.outputs.usns }}" ]; then
+          assets="$(jq --compact-output \
+            --arg tag "${{ steps.tag.outputs.tag }}" \
+            --arg repo "${{ steps.repo_name.outputs.github_repo_name }}" \
+            --arg usn_path "${{ steps.write_usns.outputs.usns }}" \
+            --arg usn_name "${{ env.PATCHED_USNS_FILENAME }}" \
+            '. += [
+            {
+              "path": $usn_path,
+              "name": ($repo + "-" + $tag + "-" + $usn_name),
+              "content_type": "text/plain"
+            }
+          ]' <<< "${assets}")"
+        fi
+
+        printf "::set-output name=assets::%s\n" "${assets}"
+
+    - name: Create Release
+      uses: paketo-buildpacks/github-config/actions/release/create@main
+      with:
+        repo: ${{ github.repository }}
+        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
+        tag_name: v${{ steps.tag.outputs.tag }}
+        target_commitish: ${{ github.sha }}
+        name: v${{ steps.tag.outputs.tag }}
+        body: ${{ steps.notes.outputs.release_body }}
+        draft: false
+        assets: ${{ steps.assets.outputs.assets }}
+
+  failure:
+    name: Alert on Failure
+    runs-on: ubuntu-latest
+    needs: [poll_usns, create_stack, diff, test, release, packages_changed, stack_files_changed]
+    if: ${{ always() && needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
+    steps:
+    - name: File Failure Alert Issue
+      uses: paketo-buildpacks/github-config/actions/issue/file@main
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repo: ${{ github.repository }}
+        label: "failure:release"
+        comment_if_exists: true
+        issue_title: "Failure: Create Release workflow"
+        issue_body: |
+          Create Release workflow [failed](https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}).
+          Please take a look to ensure CVE patches can be released. (cc @paketo-buildpacks/stacks-maintainers).
+        comment_body: |
+          Another failure occurred: https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}
