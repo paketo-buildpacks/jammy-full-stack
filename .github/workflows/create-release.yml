@@ -505,7 +505,7 @@ jobs:
         tag_name: v${{ steps.tag.outputs.tag }}
         target_commitish: ${{ github.sha }}
         name: v${{ steps.tag.outputs.tag }}
-        body: "Will be added later - too many packages for automationt to handle"
+        body: ${{ steps.notes.outputs.release_body }}
         draft: false
         assets: ${{ steps.assets.outputs.assets }}
 
