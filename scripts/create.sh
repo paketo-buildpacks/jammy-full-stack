@@ -16,12 +16,21 @@ source "${PROG_DIR}/.util/tools.sh"
 source "${PROG_DIR}/.util/print.sh"
 
 function main() {
+  local unbuffered
+
+  unbuffered="false"
+
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
       --help|-h)
         shift 1
         usage
         exit 0
+        ;;
+
+      --unbuffered)
+        unbuffered="true"
+        shift 1
         ;;
 
       "")
@@ -37,7 +46,7 @@ function main() {
   mkdir -p "${BUILD_DIR}"
 
   tools::install
-  stack::create
+  stack::create "${unbuffered}"
 }
 
 function usage() {
@@ -48,9 +57,11 @@ Creates the stack using the descriptor, build and run Dockerfiles in
 the repository.
 
 OPTIONS
-  --help  -h  prints the command usage
+  --help       -h   prints the command usage
+  --unbuffered      do not buffer image contents into memory for fast access
 USAGE
 }
+
 
 function tools::install() {
   util::tools::jam::install \
@@ -58,11 +69,20 @@ function tools::install() {
 }
 
 function stack::create() {
+  local unbuffered
+
+  unbuffered="${1}"
+
+  if [[ "${unbuffered}" == "true" ]]; then
+    echo "Running in unbuffered mode - this may take substantially longer"
+    echo
+  fi
 
   jam create-stack \
       --config "${STACK_DIR}/stack.toml" \
       --build-output "${BUILD_DIR}/build.oci" \
-      --run-output "${BUILD_DIR}/run.oci"
+      --run-output "${BUILD_DIR}/run.oci" \
+      --unbuffered="${unbuffered}"
 }
 
 main "${@:-}"
