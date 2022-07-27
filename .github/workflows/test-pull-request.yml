@@ -18,11 +18,6 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Set Swap Space
-      uses: pierotofy/set-swap-space@master
-      with:
-        swap-size-gb: 10
-
     - name: Run Acceptance Tests
       run: ./scripts/test.sh --clean
 

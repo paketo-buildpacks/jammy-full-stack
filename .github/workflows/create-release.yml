@@ -12,7 +12,7 @@ on:
         description: 'Version of the release to cut (e.g. 1.2.3)'
         required: false
       force:
-        description: 'Release stack even if change validator does not detect changes'
+        description: 'Release stack even if change validator does not detect changes, or a package is removed'
         required: true
         type: choice
         default: 'false'
@@ -183,8 +183,11 @@ jobs:
     outputs:
       build_added: ${{ steps.build_diff.outputs.added }}
       build_modified: ${{ steps.build_diff.outputs.modified }}
+      build_removed_with_force: ${{ steps.build_diff.outputs.removed }}
       run_added: ${{ steps.run_diff.outputs.added }}
       run_modified: ${{ steps.run_diff.outputs.modified }}
+      run_removed_with_force: ${{ steps.run_diff.outputs.removed }}
+      removed_with_force: ${{ steps.removed_with_force.outputs.packages_removed }}
     needs: [ create_stack ]
     runs-on: ubuntu-latest
     steps:
@@ -252,6 +255,7 @@ jobs:
         current: "/github/workspace/${{ env.RUN_RECEIPT_FILENAME }}"
 
     - name: Fail If Packages Removed
+      id: removed_with_force
       run: |
          build=$(jq '. | length' <<< "${BUILD_REMOVED}")
          echo "Build packages removed: ${build}"
@@ -259,13 +263,30 @@ jobs:
          run=$(jq '. | length' <<< "${RUN_REMOVED}")
          echo "Run packages removed: ${run}"
 
+         ## only fail if packages are removed AND the release has not been forced
          if [ "${build}" -gt 0 ] || [ "${run}" -gt 0 ]; then
-           echo "Packages removed. Stack cannot be released."
-           exit 1
+           if [ "${{ github.event.inputs.force }}" != 'true' ]; then
+             echo "Packages removed without authorization. Stack cannot be released."
+             exit 1
+           else
+             echo "::set-output name=packages_removed::true"
+           fi
+         else
+           echo "::set-output name=packages_removed::false"
          fi
       env:
         BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
         RUN_REMOVED: ${{ steps.run_diff.outputs.removed }}
+
+  run_if_packages_removed_with_force:
+    name: Run If Packages Removed With Force
+    needs: [ diff ]
+    runs-on: ubuntu-latest
+    if: ${{ needs.diff.outputs.removed_with_force == 'true' }}
+    steps:
+    - name: Run if packages removed with force
+      run: |
+        echo "packages removed with user-provided force"
 
   packages_changed:
     name: Determine If Packages Changed
@@ -361,7 +382,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [poll_usns, create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, test, force_release_creation ]
+    needs: [poll_usns, create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation ]
     if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
     steps:
     - name: Print Release Reasoning
@@ -369,6 +390,7 @@ jobs:
         printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
         printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
         printf "Run If Packages Changed: %s\n" "${{ needs.run_if_packages_changed.result }}"
+        printf "Run If Packages Removed With Force: %s\n" "${{ needs.run_if_packages_removed_with_force.result }}"
         printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
         printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
@@ -446,8 +468,10 @@ jobs:
         run_image: "paketobuildpacks/run-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
         build_packages_added: ${{ needs.diff.outputs.build_added }}
         build_packages_modified: ${{ needs.diff.outputs.build_modified }}
+        build_packages_removed_with_force: ${{ needs.diff.outputs.build_removed_with_force }}
         run_packages_added: ${{ needs.diff.outputs.run_added }}
         run_packages_modified: ${{ needs.diff.outputs.run_modified }}
+        run_packages_removed_with_force: ${{ needs.diff.outputs.run_removed_with_force }}
         patched_usns: ${{ needs.poll_usns.outputs.usns }}
 
     - name: Setup Release Assets
