@@ -54,6 +54,22 @@ jobs:
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${registry_repo}:${{ steps.event.outputs.tag }}"
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${registry_repo}:latest"
 
+        # If the repository name contains 'bionic', let's push it to legacy image locations as well:
+        #    paketobuildpacks/{build/run}:{version}-{variant}
+        #    paketobuildpacks/{build/run}:{version}-{variant}-cnb
+        if [[ ${registry_repo} == "bionic"-* ]];
+          then
+          # Strip the final part from a repo name after the `-`
+          # bionic-tiny --> tiny
+          variant="${registry_repo#bionic-}"
+
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${{ steps.event.outputs.tag }}-${variant}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${{ steps.event.outputs.tag }}-${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${{ steps.event.outputs.tag }}-${variant}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${{ steps.event.outputs.tag }}-${variant}-cnb"
+        fi
+
+
   failure:
     name: Alert on Failure
     runs-on: ubuntu-latest
