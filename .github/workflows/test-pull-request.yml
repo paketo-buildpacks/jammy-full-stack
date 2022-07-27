@@ -18,8 +18,19 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
+    - name: Create stack
+      run: |
+        # If the repository name contains 'full' then we create the stack with
+        # the --unbuffered flag to avoid hitting memory limits in github
+        # workers
+        if [[ ${{ github.repository }} == *-"full"-* ]]; then
+          ./scripts/create.sh --unbuffered
+        else
+          ./scripts/create.sh
+        fi
+
     - name: Run Acceptance Tests
-      run: ./scripts/test.sh --clean
+      run: ./scripts/test.sh
 
   upload:
     name: Upload Workflow Event Payload
