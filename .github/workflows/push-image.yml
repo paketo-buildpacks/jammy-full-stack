@@ -57,6 +57,8 @@ jobs:
         # If the repository name contains 'bionic', let's push it to legacy image locations as well:
         #    paketobuildpacks/{build/run}:{version}-{variant}
         #    paketobuildpacks/{build/run}:{version}-{variant}-cnb
+        #    paketobuildpacks/{build/run}:{variant}-cnb
+        #    paketobuildpacks/{build/run}:{variant}
         if [[ ${registry_repo} == "bionic"-* ]];
           then
           # Strip the final part from a repo name after the `-`
@@ -65,8 +67,13 @@ jobs:
 
           sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${{ steps.event.outputs.tag }}-${variant}"
           sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${{ steps.event.outputs.tag }}-${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${variant}"
+
           sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${{ steps.event.outputs.tag }}-${variant}"
           sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${{ steps.event.outputs.tag }}-${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}"
         fi
 
 
