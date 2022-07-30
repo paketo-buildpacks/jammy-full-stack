@@ -35,6 +35,24 @@ jobs:
         output: "/github/workspace/run.oci"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
+    - name: Get Registry Repo Name
+      id: registry-repo
+      run: |
+        # Strip off the Github org prefix and 'stack' suffix from repo name
+        # paketo-buildpacks/some-name-stack --> some-name
+        echo "::set-output name=name::$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')"
+
+    - name: Setup gcloud
+      if: ${{ startsWith(steps.registry-repo.outputs.name, 'bionic-') }}
+      uses: google-github-actions/setup-gcloud@master
+      with:
+        version: '270.0.0'
+        service_account_key: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
+
+    - name: Configure docker gcloud auth
+      if: ${{ startsWith(steps.registry-repo.outputs.name, 'bionic-') }}
+      run: gcloud auth configure-docker gcr.io
+
     - name: Push to DockerHub
       id: push
       env:
@@ -44,21 +62,19 @@ jobs:
       run: |
         echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
 
-        # Strip off the Github org prefix and 'stack' suffix from repo name
-        # paketo-buildpacks/some-name-stack --> some-name
-        registry_repo=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${{ steps.registry-repo.outputs.name }}:latest"
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${registry_repo}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${registry_repo}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${registry_repo}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${registry_repo}:latest"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${{ steps.registry-repo.outputs.name }}:latest"
 
         # If the repository name contains 'bionic', let's push it to legacy image locations as well:
         #    paketobuildpacks/{build/run}:{version}-{variant}
         #    paketobuildpacks/{build/run}:{version}-{variant}-cnb
         #    paketobuildpacks/{build/run}:{variant}-cnb
         #    paketobuildpacks/{build/run}:{variant}
+        # Also push a bionic run image to GCR as a legacy run image mirror
+        registry_repo="${{ steps.registry-repo.outputs.name }}"
         if [[ ${registry_repo} == "bionic"-* ]];
           then
           # Strip the final part from a repo name after the `-`
@@ -74,6 +90,8 @@ jobs:
           sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${{ steps.event.outputs.tag }}-${variant}-cnb"
           sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}-cnb"
           sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}"
+
+          sudo skopeo copy "docker://${DOCKERHUB_ORG}/run:${variant}-cnb" "docker://gcr.io/paketo-buildpacks/run:${variant}-cnb"
         fi
 
 
