@@ -44,7 +44,7 @@ jobs:
 
     - name: Setup gcloud
       if: ${{ startsWith(steps.registry-repo.outputs.name, 'bionic-') }}
-      uses: google-github-actions/setup-gcloud@master
+      uses: google-github-actions/setup-gcloud@main
       with:
         version: '270.0.0'
         service_account_key: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
