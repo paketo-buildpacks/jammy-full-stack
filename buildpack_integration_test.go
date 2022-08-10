@@ -130,7 +130,7 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(container).Should(BeAvailable())
-		Eventually(container).Should(Serve(ContainSubstring("go1.17")).OnPort(8080))
+		Eventually(container).Should(Serve(MatchRegexp(`go1.*`)).OnPort(8080))
 	})
 }
 
