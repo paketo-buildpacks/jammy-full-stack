@@ -42,22 +42,18 @@ jobs:
         # paketo-buildpacks/some-name-stack --> some-name
         echo "::set-output name=name::$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')"
 
-    - name: Login to GCR
-      if: ${{ startsWith(steps.registry-repo.outputs.name, 'bionic-') }}
-      uses: docker/login-action@v2
-      with:
-        registry: gcr.io
-        username: _json_key
-        password: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
-
     - name: Push to DockerHub
       id: push
       env:
         DOCKERHUB_USERNAME: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
         DOCKERHUB_PASSWORD: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_PASSWORD }}
         DOCKERHUB_ORG: "paketobuildpacks"
+        GCR_USERNAME: _json_key
+        GCR_PASSWORD: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
+        GCR_PROJECT: "paketo-buildpacks"
       run: |
         echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
+        echo "${GCR_PASSWORD}" | sudo skopeo login --username "${GCR_USERNAME}" --password-stdin gcr.io
 
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${{ steps.registry-repo.outputs.name }}:latest"
@@ -88,7 +84,7 @@ jobs:
           sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}-cnb"
           sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}"
 
-          sudo skopeo copy "docker://${DOCKERHUB_ORG}/run:${variant}-cnb" "docker://gcr.io/paketo-buildpacks/run:${variant}-cnb"
+          sudo skopeo copy "docker://${DOCKERHUB_ORG}/run:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/run:${variant}-cnb"
         fi
 
 
