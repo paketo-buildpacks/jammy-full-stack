@@ -16,7 +16,7 @@ source "${PROG_DIR}/.util/tools.sh"
 source "${PROG_DIR}/.util/print.sh"
 
 function main() {
-  local unbuffered
+  local unbuffered secrets
 
   unbuffered="false"
 
@@ -33,6 +33,11 @@ function main() {
         shift 1
         ;;
 
+      --secret)
+        secrets+=("${2}")
+        shift 2
+        ;;
+
       "")
         # skip if the argument is empty
         shift 1
@@ -46,7 +51,7 @@ function main() {
   mkdir -p "${BUILD_DIR}"
 
   tools::install
-  stack::create "${unbuffered}"
+  stack::create "${unbuffered}" ${secrets[@]}
 }
 
 function usage() {
@@ -59,6 +64,7 @@ the repository.
 OPTIONS
   --help       -h   prints the command usage
   --unbuffered      do not buffer image contents into memory for fast access
+  --secret          provide a secret in the form key=value. Use flag multiple times to provide multiple secrets
 USAGE
 }
 
@@ -69,20 +75,29 @@ function tools::install() {
 }
 
 function stack::create() {
-  local unbuffered
+  local unbuffered secrets
 
   unbuffered="${1}"
+  shift 1
+  secrets=("${@}")
 
   if [[ "${unbuffered}" == "true" ]]; then
     echo "Running in unbuffered mode - this may take substantially longer"
     echo
   fi
 
-  jam create-stack \
-      --config "${STACK_DIR}/stack.toml" \
-      --build-output "${BUILD_DIR}/build.oci" \
-      --run-output "${BUILD_DIR}/run.oci" \
+  args=(
+      --config "${STACK_DIR}/stack.toml"
+      --build-output "${BUILD_DIR}/build.oci"
+      --run-output "${BUILD_DIR}/run.oci"
       --unbuffered="${unbuffered}"
+    )
+
+  for secret in "${secrets[@]}"; do
+    args+=("--secret" "${secret}")
+  done
+
+  jam create-stack "${args[@]}"
 }
 
 main "${@:-}"
