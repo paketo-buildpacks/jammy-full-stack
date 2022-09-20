@@ -312,7 +312,7 @@ jobs:
 
         # shellcheck disable=SC2153
         build_modified=$(jq '. | length' <<< "${BUILD_MODIFIED}")
-        echo "Build packages modified: ${build_added}"
+        echo "Build packages modified: ${build_modified}"
 
         # shellcheck disable=SC2153
         run_added=$(jq '. | length' <<< "${RUN_ADDED}")
@@ -320,7 +320,7 @@ jobs:
 
         # shellcheck disable=SC2153
         run_modified=$(jq '. | length' <<< "${RUN_MODIFIED}")
-        echo "Run packages added: ${run_added}"
+        echo "Run packages modified: ${run_modified}"
 
         if [ "${build_added}" -eq 0 ] && [ "${build_modified}" -eq 0 ] && [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
           echo "No packages changed."
