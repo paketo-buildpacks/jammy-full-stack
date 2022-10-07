@@ -15,6 +15,10 @@ source "${PROG_DIR}/.util/tools.sh"
 # shellcheck source=SCRIPTDIR/.util/print.sh
 source "${PROG_DIR}/.util/print.sh"
 
+if [[ $BASH_VERSINFO -lt 4 ]]; then
+  util::print::error "Before running this script please update Bash to v4 or higher (e.g. on OSX: \$ brew install bash)"
+fi
+
 function main() {
   local unbuffered secrets
 
