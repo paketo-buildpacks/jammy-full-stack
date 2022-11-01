@@ -61,12 +61,14 @@ jobs:
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
         sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${{ steps.registry-repo.outputs.name }}:latest"
 
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://gcr.io/${GCR_PROJECT}/run-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://gcr.io/${GCR_PROJECT}/run-${{ steps.registry-repo.outputs.name }}:latest"
+
         # If the repository name contains 'bionic', let's push it to legacy image locations as well:
         #    paketobuildpacks/{build/run}:{version}-{variant}
         #    paketobuildpacks/{build/run}:{version}-{variant}-cnb
         #    paketobuildpacks/{build/run}:{variant}-cnb
         #    paketobuildpacks/{build/run}:{variant}
-        # Also push a bionic run image to GCR as a legacy run image mirror
         registry_repo="${{ steps.registry-repo.outputs.name }}"
         if [[ ${registry_repo} == "bionic"-* ]];
           then
