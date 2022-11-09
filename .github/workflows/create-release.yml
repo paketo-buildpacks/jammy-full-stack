@@ -75,7 +75,7 @@ jobs:
       if: ${{ steps.download_patched.outputs.output_path != '' }}
       run: |
         patched=$(jq --compact-output . < "${GITHUB_WORKSPACE}/${{ env.PATCHED_USNS_FILENAME }}")
-        printf "::set-output name=patched::%s\n" "${patched}"
+        printf "patched=%s\n" "${patched}" >> "$GITHUB_OUTPUT"
 
     - name: Get Stack Distribution Name
       id: distro
@@ -84,7 +84,7 @@ jobs:
         # paketo-buildpacks/jammy-tiny-stack --> jammy
         distro="$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-.*$//')"
         echo "Ubuntu distribution: ${distro}"
-        printf "::set-output name=distro::%s\n" "${distro}"
+        printf "distro=%s\n" "${distro}" >> "$GITHUB_OUTPUT"
 
     - name: Get New USNs
       id: usns
@@ -115,11 +115,11 @@ jobs:
         if [ -z "${changed}" ]
         then
           echo "No relevant files changed since previous release."
-          echo "::set-output name=stack_files_changed::false"
+          echo "stack_files_changed=false" >> "$GITHUB_OUTPUT"
         else
           echo "Relevant files have changed since previous release."
           echo "${changed}"
-          echo "::set-output name=stack_files_changed::true"
+          echo "stack_files_changed=true" >> "$GITHUB_OUTPUT"
         fi
 
   run_if_stack_files_changed:
@@ -152,8 +152,8 @@ jobs:
                             --run-archive "${GITHUB_WORKSPACE}/build/run.oci" \
                             --build-receipt ${{ env.BUILD_RECEIPT_FILENAME }} \
                             --run-receipt ${{ env.RUN_RECEIPT_FILENAME }}
-        echo "::set-output name=build_receipt::${{ env.BUILD_RECEIPT_FILENAME }}"
-        echo "::set-output name=run_receipt::${{ env.RUN_RECEIPT_FILENAME }}"
+        echo "build_receipt=${{ env.BUILD_RECEIPT_FILENAME }}" >> "$GITHUB_OUTPUT"
+        echo "run_receipt=${{ env.RUN_RECEIPT_FILENAME }}" >> "$GITHUB_OUTPUT"
 
     - name: Upload run image
       uses: actions/upload-artifact@v3
@@ -208,10 +208,10 @@ jobs:
         gh auth status
         # shellcheck disable=SC2046
         if [ $(gh api "/repos/${{ github.repository }}/releases" | jq -r 'length') -eq 0 ]; then
-          echo "::set-output name=exists::false"
+          echo "exists=false" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-        echo "::set-output name=exists::true"
+        echo "exists=true" >> "$GITHUB_OUTPUT"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -270,10 +270,10 @@ jobs:
              echo "Packages removed without authorization. Stack cannot be released."
              exit 1
            else
-             echo "::set-output name=packages_removed::true"
+             echo "packages_removed=true" >> "$GITHUB_OUTPUT"
            fi
          else
-           echo "::set-output name=packages_removed::false"
+           echo "packages_removed=false" >> "$GITHUB_OUTPUT"
          fi
       env:
         BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
@@ -317,10 +317,10 @@ jobs:
 
         if [ "${build_added}" -eq 0 ] && [ "${build_modified}" -eq 0 ] && [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
           echo "No packages changed."
-          echo "::set-output name=packages_changed::false"
+          echo "packages_changed=false" >> "$GITHUB_OUTPUT"
         else
           echo "Packages changed."
-          echo "::set-output name=packages_changed::true"
+          echo "packages_changed=true" >> "$GITHUB_OUTPUT"
         fi
 
       env:
@@ -434,14 +434,14 @@ jobs:
         if [ -z "${tag}" ]; then
           tag="${{ steps.semver.outputs.tag }}"
         fi
-        echo "::set-output name=tag::${tag}"
+        echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
     - name: Write USNs File
       id: write_usns
       if: ${{ needs.poll_usns.outputs.usns != '[]'  }}
       run: |
         jq . <<< "${USNS}" > "${USNS_PATH}"
-        echo "::set-output name=usns::${USNS_PATH}"
+        echo "usns=${USNS_PATH}" >> "$GITHUB_OUTPUT"
       env:
         USNS_PATH: "${{ env.PATCHED_USNS_FILENAME }}"
         USNS: ${{ needs.poll_usns.outputs.usns }}
@@ -453,12 +453,12 @@ jobs:
         # Strip off the org and slash from repo name
         # paketo-buildpacks/repo-name --> repo-name
         repo=$(echo "${full}" | sed 's/^.*\///')
-        echo "::set-output name=github_repo_name::${repo}"
+        echo "github_repo_name=${repo}" >> "$GITHUB_OUTPUT"
 
         # Strip off 'stack' suffix from repo name
         # some-name-stack --> some-name
         registry_repo="${repo//-stack/}"
-        echo "::set-output name=registry_repo_name::${registry_repo}"
+        echo "registry_repo_name=${registry_repo}" >> "$GITHUB_OUTPUT"
 
 
     - name: Create Release Notes
@@ -520,7 +520,7 @@ jobs:
           ]' <<< "${assets}")"
         fi
 
-        printf "::set-output name=assets::%s\n" "${assets}"
+        printf "assets=%s\n" "${assets}" >> "$GITHUB_OUTPUT"
 
     - name: Create Release
       uses: paketo-buildpacks/github-config/actions/release/create@main

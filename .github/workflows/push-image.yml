@@ -14,9 +14,9 @@ jobs:
     - name: Parse Event
       id: event
       run: |
-        echo "::set-output name=tag::$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)"
-        echo "::set-output name=build_download_url::$(jq -r '.release.assets[] | select(.name | endswith("build.oci")) | .url' "${GITHUB_EVENT_PATH}")"
-        echo "::set-output name=run_download_url::$(jq -r '.release.assets[] | select(.name | endswith("run.oci")) | .url' "${GITHUB_EVENT_PATH}")"
+        echo "tag=$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)" >> "$GITHUB_OUTPUT"
+        echo "build_download_url=$(jq -r '.release.assets[] | select(.name | endswith("build.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
+        echo "run_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
 
     - name: Checkout
       uses: actions/checkout@v3
@@ -40,7 +40,7 @@ jobs:
       run: |
         # Strip off the Github org prefix and 'stack' suffix from repo name
         # paketo-buildpacks/some-name-stack --> some-name
-        echo "::set-output name=name::$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')"
+        echo "name=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')" >> "$GITHUB_OUTPUT"
 
     - name: Push to DockerHub
       id: push
