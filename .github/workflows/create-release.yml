@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version of the release to cut (e.g. 1.2.3)'
+        description: 'Version of the release to cut (e.g. 1.2.3). No leading v'
         required: false
       force:
         description: 'Release stack even if change validator does not detect changes, or a package is removed'
@@ -264,7 +264,7 @@ jobs:
          run=$(jq '. | length' <<< "${RUN_REMOVED}")
          echo "Run packages removed: ${run}"
 
-         ## only fail if packages are removed AND the release has not been forced
+         # only fail if packages are removed AND the release has not been forced
          if [ "${build}" -gt 0 ] || [ "${run}" -gt 0 ]; then
            if [ "${{ github.event.inputs.force }}" != 'true' ]; then
              echo "Packages removed without authorization. Stack cannot be released."
