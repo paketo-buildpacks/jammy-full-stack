@@ -14,8 +14,10 @@ source "${PROG_DIR}/.util/tools.sh"
 source "${PROG_DIR}/.util/print.sh"
 
 function main() {
-  local clean
+  local clean token
   clean="false"
+  token=""
+
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
       --help|-h)
@@ -29,6 +31,11 @@ function main() {
         clean="true"
         ;;
 
+      --token|-t)
+        token="${2}"
+        shift 2
+        ;;
+
       "")
         # skip if the argument is empty
         shift 1
@@ -39,7 +46,7 @@ function main() {
     esac
   done
 
-  tools::install
+  tools::install "${token}"
 
   if [[ "${clean}" == "true" ]]; then
     util::print::title "Cleaning up preexisting stack archives..."
@@ -65,17 +72,23 @@ ${STACK_DIR}/build/run.oci
 if they exist. Otherwise, first runs create.sh to create them.
 
 OPTIONS
-  --clean  -c  clears contents of stack output directory before running tests
-  --help   -h  prints the command usage
+  --clean         -c  clears contents of stack output directory before running tests
+  --token <token>     Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
+  --help          -h  prints the command usage
 USAGE
 }
 
 function tools::install() {
+  local token
+  token="${1}"
+
   util::tools::jam::install \
-    --directory "${STACK_DIR}/.bin"
+    --directory "${STACK_DIR}/.bin" \
+    --token "${token}"
 
   util::tools::pack::install \
-    --directory "${STACK_DIR}/.bin"
+    --directory "${STACK_DIR}/.bin" \
+    --token "${token}"
 
   util::tools::skopeo::check
 }
