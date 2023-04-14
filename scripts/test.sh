@@ -96,6 +96,7 @@ function tools::install() {
 function tests::run() {
   util::print::title "Run Stack Acceptance Tests"
 
+  export CGO_ENABLED=0
   testout=$(mktemp)
   pushd "${STACK_DIR}" > /dev/null
     if GOMAXPROCS="${GOMAXPROCS:-4}" go test -count=1 -timeout 0 ./... -v -run Acceptance | tee "${testout}"; then
