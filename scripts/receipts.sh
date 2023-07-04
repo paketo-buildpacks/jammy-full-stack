@@ -29,12 +29,12 @@ function main() {
         exit 0
         ;;
 
-      --build-archive|-b)
+      --build-image|-b)
         build="${2}"
         shift 2
         ;;
 
-      --run-archive|-r)
+      --run-image|-r)
         run="${2}"
         shift 2
         ;;
@@ -76,9 +76,9 @@ stack.
 
 OPTIONS
   --help          -h  prints the command usage
-  --build-archive -b  path to OCI archive of build image. Defaults to
+  --build-image   -b  path to OCI image of build image. Defaults to
                       ${BUILD_DIR}/build.oci
-  --run-archive   -r  path to OCI archive of build image
+  --run-image     -r  path to OCI image of build image
                       ${BUILD_DIR}/run.oci
   --build-receipt -B  path to output build image package receipt. Defaults to
                       ${BUILD_DIR}/build-receipt.txt
@@ -93,15 +93,15 @@ function tools::install() {
 }
 
 function receipts::generate() {
-  local archive output hasDpkg
+  local image output
 
-  archive="${1}"
+  image="${1}"
   output="${2}"
 
-  util::print::title "Generating package SBOM for ${archive}"
+  util::print::title "Generating package SBOM for ${image}"
 
   util::print::info "Generating CycloneDX package SBOM using syft"
-  syft packages "${archive}" --output cyclonedx-json --file "${output}"
+  syft packages "${image}" --output cyclonedx-json --file "${output}"
 }
 
 main "${@:-}"
