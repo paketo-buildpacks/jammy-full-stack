@@ -189,6 +189,7 @@ platforms = ["linux/amd64"]
     ruby \
     subversion \
     sysstat \
+    tzdata \
     ubuntu-minimal \
     unixodbc \
     unixodbc-dev \
@@ -325,6 +326,7 @@ platforms = ["linux/amd64"]
     rsync \
     ruby \
     subversion \
+    tzdata \
     ubuntu-minimal \
     unixodbc \
     unzip \
