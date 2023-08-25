@@ -147,6 +147,7 @@ platforms = ["linux/amd64"]
     libsigc++-2.0-0v5:amd64 \
     libsigc++-2.0-dev \
     libsigsegv2 \
+    libsodium23 \
     libsqlite0 \
     libsqlite0-dev \
     libsqlite3-0 \
@@ -298,6 +299,7 @@ platforms = ["linux/amd64"]
     libselinux1 \
     libsigc++-2.0-0v5:amd64 \
     libsigsegv2 \
+    libsodium23 \
     libsqlite0 \
     libsqlite3-0 \
     libsysfs2 \
