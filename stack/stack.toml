@@ -148,6 +148,7 @@ platforms = ["linux/amd64"]
     libsigc++-2.0-dev \
     libsigsegv2 \
     libsodium23 \
+    libsodium-dev \
     libsqlite0 \
     libsqlite0-dev \
     libsqlite3-0 \
