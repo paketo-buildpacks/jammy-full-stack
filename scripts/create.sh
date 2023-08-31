@@ -20,7 +20,7 @@ if [[ $BASH_VERSINFO -lt 4 ]]; then
 fi
 
 function main() {
-  local secrets
+  local secrets labels
 
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
@@ -32,6 +32,11 @@ function main() {
 
       --secret)
         secrets+=("${2}")
+        shift 2
+        ;;
+
+      --label)
+        labels+=("${2}")
         shift 2
         ;;
 
@@ -83,6 +88,10 @@ function stack::create() {
 
   for secret in "${secrets[@]}"; do
     args+=("--secret" "${secret}")
+  done
+
+  for label in "${labels[@]}"; do
+    args+=("--label" "${label}")
   done
 
   jam create-stack "${args[@]}"
