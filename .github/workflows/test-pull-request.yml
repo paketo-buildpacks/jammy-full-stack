@@ -20,7 +20,8 @@ jobs:
 
     - name: Create stack
       id: create-stack
-      uses: paketo-buildpacks/github-config/actions/stack/create-stack@main
+      run: |
+        scripts/create.sh
 
     - name: Run Acceptance Tests
       run: ./scripts/test.sh
