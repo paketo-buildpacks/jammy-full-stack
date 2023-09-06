@@ -15,6 +15,4 @@ RUN echo "$sources" > /etc/apt/sources.list && \
   update-locale LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 LC_ALL=en_US.UTF-8 && \
   apt-get -y $package_args install $packages && \
   rm -rf /var/lib/apt/lists/* /tmp/* /etc/apt/preferences && \
-  for path in /workspace /workspace/source-ws /workspace/source; do git config --system --add safe.directory "${path}"; done && \
-  curl -sL -o /usr/local/bin/yj https://github.com/sclevine/yj/releases/latest/download/yj-linux-amd64 && \
-  chmod +x /usr/local/bin/yj
+  for path in /workspace /workspace/source-ws /workspace/source; do git config --system --add safe.directory "${path}"; done
