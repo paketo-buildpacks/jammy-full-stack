@@ -20,7 +20,7 @@ if [[ $BASH_VERSINFO -lt 4 ]]; then
 fi
 
 function main() {
-  local secrets labels
+  local flags
 
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
@@ -31,12 +31,12 @@ function main() {
         ;;
 
       --secret)
-        secrets+=("${2}")
+        flags+=("--secret" "${2}")
         shift 2
         ;;
 
       --label)
-        labels+=("${2}")
+        flags+=("--label" "${2}")
         shift 2
         ;;
 
@@ -53,7 +53,7 @@ function main() {
   mkdir -p "${BUILD_DIR}"
 
   tools::install
-  stack::create ${secrets[@]}
+  stack::create "${flags[@]}"
 }
 
 function usage() {
@@ -76,9 +76,9 @@ function tools::install() {
 }
 
 function stack::create() {
-  local secrets
+  local flags
 
-  secrets=("${@}")
+  flags=("${@}")
 
   args=(
       --config "${STACK_DIR}/stack.toml"
@@ -86,13 +86,7 @@ function stack::create() {
       --run-output "${BUILD_DIR}/run.oci"
     )
 
-  for secret in "${secrets[@]}"; do
-    args+=("--secret" "${secret}")
-  done
-
-  for label in "${labels[@]}"; do
-    args+=("--label" "${label}")
-  done
+  args+=("${flags[@]}")
 
   jam create-stack "${args[@]}"
 }
