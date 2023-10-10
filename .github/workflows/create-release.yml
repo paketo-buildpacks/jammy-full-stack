@@ -2,7 +2,7 @@ name: Create Release
 
 on:
   schedule:
-  - cron: '*/30 * * * *'  # every 30 minutes
+  - cron: '27 2,14 * * *' # daily at 02:27 and 14:27 UTC
   push:
     branches:
     - main
