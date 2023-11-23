@@ -188,7 +188,6 @@ platforms = ["linux/amd64"]
     psmisc \
     python3 \
     rsync \
-    ruby \
     subversion \
     sysstat \
     tzdata \
@@ -327,7 +326,6 @@ platforms = ["linux/amd64"]
     psmisc \
     python3 \
     rsync \
-    ruby \
     subversion \
     tzdata \
     ubuntu-minimal \
