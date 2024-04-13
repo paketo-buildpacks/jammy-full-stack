@@ -6,33 +6,55 @@ on:
     - published
 
 jobs:
+  preparation:
+    name: Preparation
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      DOCKERHUB_ORG: ${{ steps.set-dockerhub-org-namespace.outputs.DOCKERHUB_ORG}}
+    steps:
+
+    - name: Set matrix
+      id: set-matrix
+      run: |
+        release_version="$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)"
+
+        # Strip off the org and slash from repo name
+        # paketo-buildpacks/repo-name --> repo-name
+        repo_name=$(echo "${{ github.repository }}" | sed 's/^.*\///')
+
+        asset_prefix="${repo_name}-${release_version}-"
+        oci_images=$(jq -c --arg asset_prefix "$asset_prefix" '[.release.assets[].name | select(endswith(".oci")) | split(".oci") | .[0] | split($asset_prefix) | .[1]]' "${GITHUB_EVENT_PATH}")
+        printf "matrix=%s\n" "${oci_images}" >> "$GITHUB_OUTPUT"
+
+    - name: Set DOCKERHUB_ORG namespace
+      id: set-dockerhub-org-namespace
+      run: echo "DOCKERHUB_ORG=${GITHUB_REPOSITORY_OWNER//-/}" >> "$GITHUB_OUTPUT"
+
   push:
     name: Push
     runs-on: ubuntu-22.04
-    steps:
+    needs: preparation
+    strategy:
+      max-parallel: 4
+      matrix:
+        oci_image: ${{ fromJSON(needs.preparation.outputs.matrix) }}
 
+    steps:
     - name: Parse Event
       id: event
       run: |
         echo "tag=$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)" >> "$GITHUB_OUTPUT"
-        echo "build_download_url=$(jq -r '.release.assets[] | select(.name | endswith("build.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-        echo "run_download_url=$(jq -r '.release.assets[] | select(.name | endswith("run.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
+        echo "${{ matrix.oci_image }}_download_url=$(jq -r '.release.assets[] | select(.name | endswith("${{ matrix.oci_image }}.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
 
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Download Build Image
+    - name: Download ${{ matrix.oci_image }} Image
       uses: paketo-buildpacks/github-config/actions/release/download-asset@main
       with:
-        url: ${{ steps.event.outputs.build_download_url }}
-        output: "/github/workspace/build.oci"
-        token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
-
-    - name: Download Run Image
-      uses: paketo-buildpacks/github-config/actions/release/download-asset@main
-      with:
-        url: ${{ steps.event.outputs.run_download_url }}
-        output: "/github/workspace/run.oci"
+        url: ${{ steps.event.outputs[format('{0}_download_url', matrix.oci_image)] }}
+        output: "/github/workspace/${{ matrix.oci_image }}.oci"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
     - name: Get Registry Repo Name
@@ -42,30 +64,24 @@ jobs:
         # paketo-buildpacks/some-name-stack --> some-name
         echo "name=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')" >> "$GITHUB_OUTPUT"
 
-    - name: Push to DockerHub
+    - name: Push ${{ matrix.oci_image }} Image to DockerHub
       id: push
       env:
         DOCKERHUB_USERNAME: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
         DOCKERHUB_PASSWORD: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_PASSWORD }}
-        DOCKERHUB_ORG: "paketobuildpacks"
+        DOCKERHUB_ORG: "${{ needs.preparation.outputs.DOCKERHUB_ORG }}"
         GCR_USERNAME: _json_key
         GCR_PASSWORD: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
-        GCR_PROJECT: "paketo-buildpacks"
+        GCR_PROJECT: "${GITHUB_REPOSITORY_OWNER}"
       run: |
         echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
         echo "${GCR_PASSWORD}" | sudo skopeo login --username "${GCR_USERNAME}" --password-stdin gcr.io
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build-${{ steps.registry-repo.outputs.name }}:latest"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://gcr.io/${GCR_PROJECT}/build-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://gcr.io/${GCR_PROJECT}/build-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run-${{ steps.registry-repo.outputs.name }}:latest"
-
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://gcr.io/${GCR_PROJECT}/run-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://gcr.io/${GCR_PROJECT}/run-${{ steps.registry-repo.outputs.name }}:latest"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
 
         # If the repository name contains 'bionic', let's push it to legacy image locations as well:
         #    paketobuildpacks/{build/run}:{version}-{variant}
@@ -79,18 +95,12 @@ jobs:
           # bionic-tiny --> tiny
           variant="${registry_repo#bionic-}"
 
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${{ steps.event.outputs.tag }}-${variant}"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${{ steps.event.outputs.tag }}-${variant}-cnb"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${variant}-cnb"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/build.oci" "docker://${DOCKERHUB_ORG}/build:${variant}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${{ steps.event.outputs.tag }}-${variant}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${{ steps.event.outputs.tag }}-${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}-cnb"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}"
 
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${{ steps.event.outputs.tag }}-${variant}"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${{ steps.event.outputs.tag }}-${variant}-cnb"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}-cnb"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/run.oci" "docker://${DOCKERHUB_ORG}/run:${variant}"
-
-          sudo skopeo copy "docker://${DOCKERHUB_ORG}/build:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/build:${variant}-cnb"
-          sudo skopeo copy "docker://${DOCKERHUB_ORG}/run:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/run:${variant}-cnb"
+          sudo skopeo copy "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}:${variant}-cnb"
         fi
 
 
