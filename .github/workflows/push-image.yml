@@ -72,7 +72,7 @@ jobs:
         DOCKERHUB_ORG: "${{ needs.preparation.outputs.DOCKERHUB_ORG }}"
         GCR_USERNAME: _json_key
         GCR_PASSWORD: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
-        GCR_PROJECT: "${GITHUB_REPOSITORY_OWNER}"
+        GCR_PROJECT: "${{ github.repository_owner }}"
       run: |
         echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
         echo "${GCR_PASSWORD}" | sudo skopeo login --username "${GCR_USERNAME}" --password-stdin gcr.io
