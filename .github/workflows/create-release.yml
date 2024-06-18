@@ -28,7 +28,7 @@ env:
 jobs:
   poll_usns:
     name: Poll USNs
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       usns: ${{ steps.usns.outputs.usns }}
     steps:
@@ -96,7 +96,7 @@ jobs:
 
   stack_files_changed:
     name: Determine If Stack Files Changed
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: poll_usns
     if: ${{ ! ( needs.poll_usns.outputs.usns == '[]' && github.event_name == 'schedule' ) }}
     outputs:
@@ -124,7 +124,7 @@ jobs:
 
   run_if_stack_files_changed:
     name: Run If Stack Files Changed
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [stack_files_changed]
     if: ${{ needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
     steps:
@@ -136,7 +136,7 @@ jobs:
     name: Create Stack
     needs: poll_usns
     if: ${{ ! ( needs.poll_usns.outputs.usns == '[]' && github.event_name == 'schedule' ) }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - name: Checkout
       uses: actions/checkout@v3
@@ -191,7 +191,7 @@ jobs:
       run_removed_with_force: ${{ steps.run_diff.outputs.removed }}
       removed_with_force: ${{ steps.removed_with_force.outputs.packages_removed }}
     needs: [ create_stack ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - name: Download Build Receipt
       uses: actions/download-artifact@v3
@@ -283,7 +283,7 @@ jobs:
   run_if_packages_removed_with_force:
     name: Run If Packages Removed With Force
     needs: [ diff ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{ needs.diff.outputs.removed_with_force == 'true' }}
     steps:
     - name: Run if packages removed with force
@@ -293,7 +293,7 @@ jobs:
   packages_changed:
     name: Determine If Packages Changed
     needs: [ diff ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       packages_changed: ${{ steps.compare.outputs.packages_changed }}
     steps:
@@ -332,7 +332,7 @@ jobs:
 
   run_if_packages_changed:
     name: Run If Packages Changed
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [packages_changed]
     if: ${{ needs.packages_changed.outputs.packages_changed == 'true' }}
     steps:
@@ -343,7 +343,7 @@ jobs:
   test:
     name: Acceptance Test
     needs: [ create_stack ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - name: Setup Go
       uses: actions/setup-go@v3
@@ -374,7 +374,7 @@ jobs:
 
   force_release_creation:
     name: Force Release Creation
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{github.event.inputs.force == 'true'}}
     steps:
     - name: Signal force release creation
@@ -383,7 +383,7 @@ jobs:
 
   release:
     name: Release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [poll_usns, create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation ]
     if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
     steps:
@@ -537,7 +537,7 @@ jobs:
 
   failure:
     name: Alert on Failure
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [poll_usns, create_stack, diff, test, release, packages_changed, stack_files_changed]
     if: ${{ always() && needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
     steps:
