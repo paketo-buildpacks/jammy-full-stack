@@ -6,6 +6,7 @@ set -o pipefail
 readonly PROG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly STACK_DIR="$(cd "${PROG_DIR}/.." && pwd)"
 readonly OUTPUT_DIR="${STACK_DIR}/build"
+readonly INTEGRATION_JSON="${STACK_DIR}/integration.json"
 
 # shellcheck source=SCRIPTDIR/.util/tools.sh
 source "${PROG_DIR}/.util/tools.sh"
@@ -14,9 +15,11 @@ source "${PROG_DIR}/.util/tools.sh"
 source "${PROG_DIR}/.util/print.sh"
 
 function main() {
-  local clean token
+  local clean token registryPort registryPid localRegistry setupLocalRegistry
   clean="false"
   token=""
+  registryPid=""
+  setupLocalRegistry=""
 
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
@@ -58,7 +61,22 @@ function main() {
     "${STACK_DIR}/scripts/create.sh"
   fi
 
+  if [[ -f $INTEGRATION_JSON ]]; then
+    setupLocalRegistry=$(jq '.setup_local_registry' $INTEGRATION_JSON)
+  fi
+
+  if [[ "${setupLocalRegistry}" == "true" ]]; then
+    registryPort=$(get::random::port)
+    registryPid=$(local::registry::start $registryPort)
+    localRegistry="127.0.0.1:$registryPort"
+    export REGISTRY_URL="${localRegistry}"
+  fi
+
   tests::run
+
+  if [[ "${setupLocalRegistry}" == "true" ]]; then
+    kill $registryPid
+  fi
 }
 
 function usage() {
@@ -72,9 +90,9 @@ ${STACK_DIR}/build/run.oci
 if they exist. Otherwise, first runs create.sh to create them.
 
 OPTIONS
-  --clean         -c  clears contents of stack output directory before running tests
-  --token <token>     Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
-  --help          -h  prints the command usage
+  --clean          -c  clears contents of stack output directory before running tests
+  --token <token>  -t  Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
+  --help           -h  prints the command usage
 USAGE
 }
 
@@ -91,6 +109,10 @@ function tools::install() {
     --token "${token}"
 
   util::tools::skopeo::check
+
+  util::tools::crane::install \
+    --directory "${STACK_DIR}/.bin" \
+    --token "${token}"
 }
 
 function tests::run() {
