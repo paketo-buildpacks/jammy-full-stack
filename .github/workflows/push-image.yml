@@ -4,6 +4,8 @@ on:
   release:
     types:
     - published
+env:
+  REGISTRIES_FILENAME: "registries.json"
 
 jobs:
   preparation:
@@ -12,7 +14,11 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       DOCKERHUB_ORG: ${{ steps.set-dockerhub-org-namespace.outputs.DOCKERHUB_ORG}}
+      push_to_gcr: ${{ steps.parse_configs.outputs.push_to_gcr}}
+      push_to_dockerhub: ${{ steps.parse_configs.outputs.push_to_dockerhub}}
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4
 
     - name: Set matrix
       id: set-matrix
@@ -30,6 +36,27 @@ jobs:
     - name: Set DOCKERHUB_ORG namespace
       id: set-dockerhub-org-namespace
       run: echo "DOCKERHUB_ORG=${GITHUB_REPOSITORY_OWNER//-/}" >> "$GITHUB_OUTPUT"
+
+    - name: Parse Configs
+      id: parse_configs
+
+      run: |
+        registries_filename="${{ env.REGISTRIES_FILENAME }}"
+
+        push_to_dockerhub=true
+        push_to_gcr=true
+
+        if [[ -f $registries_filename ]]; then
+          if jq 'has("dockerhub")' $registries_filename > /dev/null; then
+            push_to_dockerhub=$(jq '.dockerhub' $registries_filename)
+          fi
+          if jq 'has("GCR")' $registries_filename > /dev/null; then
+            push_to_gcr=$(jq '.GCR' $registries_filename)
+          fi
+        fi
+
+        echo "push_to_dockerhub=${push_to_dockerhub}" >> "$GITHUB_OUTPUT"
+        echo "push_to_gcr=${push_to_gcr}" >> "$GITHUB_OUTPUT"
 
   push:
     name: Push
@@ -74,15 +101,18 @@ jobs:
         GCR_PASSWORD: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
         GCR_PROJECT: "${{ github.repository_owner }}"
       run: |
-        echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
-        echo "${GCR_PASSWORD}" | sudo skopeo login --username "${GCR_USERNAME}" --password-stdin gcr.io
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
+        if [ "${{ needs.preparation.outputs.push_to_dockerhub }}" == "true" ]; then
+          echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
+        fi
 
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-        sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
-
+        if [ "${{ needs.preparation.outputs.push_to_gcr }}" == "true" ]; then
+          echo "${GCR_PASSWORD}" | sudo skopeo login --username "${GCR_USERNAME}" --password-stdin gcr.io
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
+          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
+        fi
         # If the repository name contains 'bionic', let's push it to legacy image locations as well:
         #    paketobuildpacks/{build/run}:{version}-{variant}
         #    paketobuildpacks/{build/run}:{version}-{variant}-cnb
@@ -102,7 +132,6 @@ jobs:
 
           sudo skopeo copy "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}:${variant}-cnb"
         fi
-
 
   failure:
     name: Alert on Failure
