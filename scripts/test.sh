@@ -5,7 +5,7 @@ set -o pipefail
 
 readonly PROG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly STACK_DIR="$(cd "${PROG_DIR}/.." && pwd)"
-readonly OUTPUT_DIR="${STACK_DIR}/build"
+readonly IMAGES_JSON="${STACK_DIR}/images.json"
 readonly INTEGRATION_JSON="${STACK_DIR}/integration.json"
 
 # shellcheck source=SCRIPTDIR/.util/tools.sh
@@ -53,10 +53,12 @@ function main() {
 
   if [[ "${clean}" == "true" ]]; then
     util::print::title "Cleaning up preexisting stack archives..."
-    rm -rf "${OUTPUT_DIR}"
+    clean::stacks
   fi
 
-  if ! [[ -f "${OUTPUT_DIR}/build.oci" ]] || ! [[ -f "${OUTPUT_DIR}/run.oci" ]]; then
+  stack_output_builds_exist=$(stack_builds_exist)
+
+  if [[ "${stack_output_builds_exist}" == "false" ]]; then
     util::print::title "Creating stack..."
     "${STACK_DIR}/scripts/create.sh"
   fi
@@ -77,16 +79,45 @@ function main() {
   if [[ "${setupLocalRegistry}" == "true" ]]; then
     kill $registryPid
   fi
+
+function join_by {
+  local d=${1-} f=${2-}
+  if shift 2; then
+    printf %s "$f" "${@/#/$d}"
+  fi
 }
 
 function usage() {
+  oci_images_arr=()
+
+  if [ -f "${IMAGES_JSON}" ]; then
+    local images=$(jq -c '.images[]' "${IMAGES_JSON}")
+
+    while read -r image; do
+      output_dir=$(echo "${image}" | jq -r '.output_dir')
+      build_image=$(echo "${image}" | jq -r '.build_image')
+      create_build_image=$(echo "${image}" | jq -r '.create_build_image')
+      run_image=$(echo "${image}" | jq -r '.run_image')
+
+      if [ $create_build_image == 'true' ]; then
+        oci_images_arr+=("${STACK_DIR}/${output_dir}/${build_image}.oci")
+      fi
+
+      oci_images_arr+=("${STACK_DIR}/${output_dir}/${run_image}.oci")
+
+    done <<<"$images"
+  else
+    oci_images_arr+=("${STACK_DIR}/build/build.oci")
+    oci_images_arr+=("${STACK_DIR}/build/run.oci")
+  fi
+
+  joined_oci_images=$(join_by $'\nand\n' ${oci_images_arr[*]})
+
   cat <<-USAGE
 test.sh [OPTIONS]
 
 Runs acceptance tests against the stack. Uses the OCI images
-${STACK_DIR}/build/build.oci
-and
-${STACK_DIR}/build/run.oci
+${joined_oci_images}
 if they exist. Otherwise, first runs create.sh to create them.
 
 OPTIONS
@@ -128,6 +159,39 @@ function tests::run() {
       util::print::error "** GO Test Failed **"
     fi
   popd > /dev/null
+}
+
+function stack_builds_exist() {
+
+  local stack_output_builds_exist="true"
+  if [ -f "${IMAGES_JSON}" ]; then
+
+    local images=$(jq -c '.images[]' "${IMAGES_JSON}")
+
+    while IFS= read -r image; do
+      stack_output_dir=$(echo "${image}" | jq -r '.output_dir')
+      if ! [[ -f "${STACK_DIR}/${stack_output_dir}/build.oci" ]] || ! [[ -f "${STACK_DIR}/${stack_output_dir}/run.oci" ]]; then
+        stack_output_builds_exist="false"
+      fi
+    done <<<"$images"
+  else
+    if ! [[ -f "${STACK_DIR}/build/build.oci" ]] || ! [[ -f "${STACK_DIR}/build/run.oci" ]]; then
+      stack_output_builds_exist="false"
+    fi
+  fi
+
+  echo "$stack_output_builds_exist"
+}
+
+function clean::stacks(){
+  if [ -f "${IMAGES_JSON}" ]; then
+    jq -c '.images[]' "${IMAGES_JSON}" | while read -r image; do
+      output_dir=$(echo "${image}" | jq -r '.output_dir')
+      rm -rf "${STACK_DIR}/${output_dir}"
+    done
+  else
+    rm -rf "${STACK_DIR}/build"
+  fi
 }
 
 main "${@:-}"
