@@ -241,7 +241,7 @@ function util::tools::skopeo::check () {
   local version
   version="v$(skopeo -v | awk '{ print $3}')"
 
-  util::print::title "Using installed skopeo version ${version}"
+  util::print::info "Using installed skopeo version ${version}"
 }
 
 function util::tools::tests::checkfocus() {
@@ -303,9 +303,10 @@ function util::tools::crane::install() {
       "${curl_args[@]}" | tar -C "${dir}" -xz crane
 
     chmod +x "${dir}/crane"
+  else
+    util::print::info "Using crane $("${dir}"/crane version)"
   fi
 }
-
 
 # Returns a random unused port
 function get::random::port() {
