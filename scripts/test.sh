@@ -79,6 +79,7 @@ function main() {
   if [[ "${setupLocalRegistry}" == "true" ]]; then
     kill $registryPid
   fi
+}
 
 function join_by {
   local d=${1-} f=${2-}
