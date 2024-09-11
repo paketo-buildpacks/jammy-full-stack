@@ -64,6 +64,11 @@ function main() {
 
   tools::install
 
+  if [ -f "${IMAGES_JSON}" ]; then
+    # we need to copy images.json for inclusion in the build image
+    cp $IMAGES_JSON "${ROOT_DIR}/stack"
+  fi
+
   # if stack or build argument is provided but not both, then throw an error
   if [[ -n "${stack_dir_name}" && ! -n "${build_dir_name}" ]] || [[ ! -n "${stack_dir_name}" && -n "${build_dir_name}" ]]; then
     util::print::error "Both stack-dir and build-dir must be provided"
@@ -94,7 +99,6 @@ OPTIONS
   --build-dir       Provide the build directory relative to the root directory. The default value is 'build'.
 USAGE
 }
-
 
 function tools::install() {
   util::tools::jam::install \
