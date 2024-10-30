@@ -5,8 +5,9 @@ set -o pipefail
 
 readonly PROG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly STACK_DIR="$(cd "${PROG_DIR}/.." && pwd)"
-readonly IMAGES_JSON="${STACK_DIR}/images.json"
+readonly STACK_IMAGES_JSON_PATH="${STACK_DIR}/images.json"
 readonly INTEGRATION_JSON="${STACK_DIR}/integration.json"
+declare STACK_IMAGES
 
 # shellcheck source=SCRIPTDIR/.util/tools.sh
 source "${PROG_DIR}/.util/tools.sh"
@@ -15,9 +16,11 @@ source "${PROG_DIR}/.util/tools.sh"
 source "${PROG_DIR}/.util/print.sh"
 
 function main() {
-  local clean token registryPort registryPid localRegistry setupLocalRegistry
+  local clean token test_only_stacks registryPort registryPid localRegistry setupLocalRegistry
+  help=""
   clean="false"
   token=""
+  test_only_stacks=""
   registryPid=""
   setupLocalRegistry=""
 
@@ -25,8 +28,7 @@ function main() {
     case "${1}" in
       --help|-h)
         shift 1
-        usage
-        exit 0
+        help="true"
         ;;
 
       --clean|-c)
@@ -36,6 +38,11 @@ function main() {
 
       --token|-t)
         token="${2}"
+        shift 2
+        ;;
+
+      --test-only-stacks)
+        test_only_stacks="${2}"
         shift 2
         ;;
 
@@ -49,6 +56,41 @@ function main() {
     esac
   done
 
+  if [ -f "${STACK_IMAGES_JSON_PATH}" ]; then
+    all_stack_images=$(jq -c '.' "${STACK_IMAGES_JSON_PATH}")
+  else
+    # If there is no images.json file, fallback to the default image configuration
+    all_stack_images=$(jq -nc '{
+  "images": [
+    {
+      "config_dir": "stack",
+      "output_dir": "build",
+      "build_image": "build",
+      "run_image": "run",
+      "create_build_image": true
+    }
+  ]
+}' | jq -c '.')
+  fi
+
+  if [[ -n "${test_only_stacks}" ]]; then
+    filter_stacks=$(echo $test_only_stacks | jq -R 'split(" ")')
+    STACK_IMAGES=$(echo "${all_stack_images}" | \
+      jq --argjson names "$filter_stacks" -c \
+      '.images[] | select(.name | IN($names[]))')
+    export TEST_ONLY_STACKS="${test_only_stacks}"
+  else
+    STACK_IMAGES=$(echo "${all_stack_images}" | jq -c '.images[]')
+    export TEST_ONLY_STACKS=""
+  fi
+
+  ## The help is after the image parsing and filtering in order to output 
+  ## proper usage information based on the images that are available
+  if [[ "${help}" == "true" ]]; then
+    usage
+    exit 0
+  fi
+
   tools::install "${token}"
 
   if [[ "${clean}" == "true" ]]; then
@@ -60,11 +102,17 @@ function main() {
 
   if [[ "${stack_output_builds_exist}" == "false" ]]; then
     util::print::title "Creating stack..."
-    "${STACK_DIR}/scripts/create.sh"
+    while read -r image; do
+      config_dir=$(echo "${image}" | jq -r '.config_dir')
+      output_dir=$(echo "${image}" | jq -r '.output_dir')
+      "${STACK_DIR}/scripts/create.sh" \
+        --stack-dir "${config_dir}" \
+        --build-dir "${output_dir}"
+    done <<<"$STACK_IMAGES"
   fi
 
   if [[ -f $INTEGRATION_JSON ]]; then
-    setupLocalRegistry=$(jq '.setup_local_registry' $INTEGRATION_JSON)
+    setupLocalRegistry=$(jq '.setup_local_registy' $INTEGRATION_JSON)
   fi
 
   if [[ "${setupLocalRegistry}" == "true" ]]; then
@@ -91,26 +139,19 @@ function join_by {
 function usage() {
   oci_images_arr=()
 
-  if [ -f "${IMAGES_JSON}" ]; then
-    local images=$(jq -c '.images[]' "${IMAGES_JSON}")
+  while read -r image; do
+    output_dir=$(echo "${image}" | jq -r '.output_dir')
+    build_image=$(echo "${image}" | jq -r '.build_image')
+    create_build_image=$(echo "${image}" | jq -r '.create_build_image')
+    run_image=$(echo "${image}" | jq -r '.run_image')
 
-    while read -r image; do
-      output_dir=$(echo "${image}" | jq -r '.output_dir')
-      build_image=$(echo "${image}" | jq -r '.build_image')
-      create_build_image=$(echo "${image}" | jq -r '.create_build_image')
-      run_image=$(echo "${image}" | jq -r '.run_image')
+    if [ $create_build_image == 'true' ]; then
+      oci_images_arr+=("${STACK_DIR}/${output_dir}/${build_image}.oci")
+    fi
 
-      if [ $create_build_image == 'true' ]; then
-        oci_images_arr+=("${STACK_DIR}/${output_dir}/${build_image}.oci")
-      fi
+    oci_images_arr+=("${STACK_DIR}/${output_dir}/${run_image}.oci")
 
-      oci_images_arr+=("${STACK_DIR}/${output_dir}/${run_image}.oci")
-
-    done <<<"$images"
-  else
-    oci_images_arr+=("${STACK_DIR}/build/build.oci")
-    oci_images_arr+=("${STACK_DIR}/build/run.oci")
-  fi
+  done <<<"$STACK_IMAGES"
 
   joined_oci_images=$(join_by $'\nand\n' ${oci_images_arr[*]})
 
@@ -124,6 +165,7 @@ if they exist. Otherwise, first runs create.sh to create them.
 OPTIONS
   --clean          -c  clears contents of stack output directory before running tests
   --token <token>  -t  Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
+  --test-only-stacks   Runs the tests of the stacks passed to this argument (e.g. java-8 nodejs-16) (optional)
   --help           -h  prints the command usage
 USAGE
 }
@@ -165,34 +207,22 @@ function tests::run() {
 function stack_builds_exist() {
 
   local stack_output_builds_exist="true"
-  if [ -f "${IMAGES_JSON}" ]; then
 
-    local images=$(jq -c '.images[]' "${IMAGES_JSON}")
-
-    while IFS= read -r image; do
-      stack_output_dir=$(echo "${image}" | jq -r '.output_dir')
-      if ! [[ -f "${STACK_DIR}/${stack_output_dir}/build.oci" ]] || ! [[ -f "${STACK_DIR}/${stack_output_dir}/run.oci" ]]; then
-        stack_output_builds_exist="false"
-      fi
-    done <<<"$images"
-  else
-    if ! [[ -f "${STACK_DIR}/build/build.oci" ]] || ! [[ -f "${STACK_DIR}/build/run.oci" ]]; then
+  while IFS= read -r image; do
+    stack_output_dir=$(echo "${image}" | jq -r '.output_dir')
+    if ! [[ -f "${STACK_DIR}/${stack_output_dir}/build.oci" ]] || ! [[ -f "${STACK_DIR}/${stack_output_dir}/run.oci" ]]; then
       stack_output_builds_exist="false"
     fi
-  fi
+  done <<<"$STACK_IMAGES"
 
   echo "$stack_output_builds_exist"
 }
 
 function clean::stacks(){
-  if [ -f "${IMAGES_JSON}" ]; then
-    jq -c '.images[]' "${IMAGES_JSON}" | while read -r image; do
-      output_dir=$(echo "${image}" | jq -r '.output_dir')
-      rm -rf "${STACK_DIR}/${output_dir}"
-    done
-  else
-    rm -rf "${STACK_DIR}/build"
-  fi
+  while read -r image; do
+    output_dir=$(echo "${image}" | jq -r '.output_dir')
+    rm -rf "${STACK_DIR}/${output_dir}"
+  done <<<"$STACK_IMAGES"
 }
 
 main "${@:-}"
