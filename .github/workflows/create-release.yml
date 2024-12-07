@@ -157,25 +157,25 @@ jobs:
         echo "run_receipt=${{ env.RUN_RECEIPT_FILENAME }}" >> "$GITHUB_OUTPUT"
 
     - name: Upload run image
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: current-run-image
         path: build/run.oci
 
     - name: Upload build image
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: current-build-image
         path: build/build.oci
 
     - name: Upload Build receipt
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: current-build-receipt
         path: ${{ steps.receipts.outputs.build_receipt }}
 
     - name: Upload Run receipt
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: current-run-receipt
         path: ${{ steps.receipts.outputs.run_receipt }}
@@ -194,12 +194,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Download Build Receipt
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: current-build-receipt
 
     - name: Download Run Receipt
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: current-run-receipt
 
@@ -358,13 +358,13 @@ jobs:
         mkdir -p build
 
     - name: Download Build Image
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: current-build-image
         path: build
 
     - name: Download Run Image
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: current-run-image
         path: build
@@ -402,22 +402,22 @@ jobs:
         fetch-depth: 0  # gets full history
 
     - name: Download current build image
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: current-build-image
 
     - name: Download current run image
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: current-run-image
 
     - name: Download Build Receipt
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: current-build-receipt
 
     - name: Download Run Receipt
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: current-run-receipt
 
