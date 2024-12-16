@@ -25,6 +25,12 @@ env:
   BUILD_RECEIPT_FILENAME: "build-receipt.cyclonedx.json"
   RUN_RECEIPT_FILENAME: "run-receipt.cyclonedx.json"
   PATCHED_USNS_FILENAME: "patched-usns.json"
+  BUILD_DIFF_ADDED_FILENAME: "build-diff-added.json"
+  BUILD_DIFF_MODIFIED_FILENAME: "build-diff-modified.json"
+  BUILD_DIFF_REMOVED_FILENAME: "build-diff-removed.json"
+  RUN_DIFF_ADDED_FILENAME: "run-diff-added.json"
+  RUN_DIFF_MODIFIED_FILENAME: "run-diff-modified.json"
+  RUN_DIFF_REMOVED_FILENAME: "run-diff-removed.json"
 jobs:
   poll_usns:
     name: Poll USNs
@@ -183,12 +189,6 @@ jobs:
   diff:
     name: Diff Packages
     outputs:
-      build_added: ${{ steps.build_diff.outputs.added }}
-      build_modified: ${{ steps.build_diff.outputs.modified }}
-      build_removed_with_force: ${{ steps.build_diff.outputs.removed }}
-      run_added: ${{ steps.run_diff.outputs.added }}
-      run_modified: ${{ steps.run_diff.outputs.modified }}
-      run_removed_with_force: ${{ steps.run_diff.outputs.removed }}
       removed_with_force: ${{ steps.removed_with_force.outputs.packages_removed }}
     needs: [ create_stack ]
     runs-on: ubuntu-24.04
@@ -248,6 +248,9 @@ jobs:
       with:
         previous: "/github/workspace/previous-${{ env.BUILD_RECEIPT_FILENAME }}"
         current: "/github/workspace/${{ env.BUILD_RECEIPT_FILENAME }}"
+        added_diff_file: "/github/workspace/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+        modified_diff_file: "/github/workspace/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+        removed_diff_file: "/github/workspace/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
 
     - name: Compare Run Packages
       id: run_diff
@@ -255,14 +258,17 @@ jobs:
       with:
         previous: "/github/workspace/previous-${{ env.RUN_RECEIPT_FILENAME }}"
         current: "/github/workspace/${{ env.RUN_RECEIPT_FILENAME }}"
+        added_diff_file: "/github/workspace/${{ env.RUN_DIFF_ADDED_FILENAME }}"
+        modified_diff_file: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
+        removed_diff_file: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
 
     - name: Fail If Packages Removed
       id: removed_with_force
       run: |
-         build=$(jq '. | length' <<< "${BUILD_REMOVED}")
+         build=$(jq '. | length' "${BUILD_REMOVED}")
          echo "Build packages removed: ${build}"
 
-         run=$(jq '. | length' <<< "${RUN_REMOVED}")
+         run=$(jq '. | length' "${RUN_REMOVED}")
          echo "Run packages removed: ${run}"
 
          # only fail if packages are removed AND the release has not been forced
@@ -277,8 +283,8 @@ jobs:
            echo "packages_removed=false" >> "$GITHUB_OUTPUT"
          fi
       env:
-        BUILD_REMOVED: ${{ steps.build_diff.outputs.removed }}
-        RUN_REMOVED: ${{ steps.run_diff.outputs.removed }}
+        BUILD_REMOVED: "/github/workspace/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
+        RUN_REMOVED: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
 
   run_if_packages_removed_with_force:
     name: Run If Packages Removed With Force
@@ -301,19 +307,19 @@ jobs:
       id: compare
       run: |
         # shellcheck disable=SC2153
-        build_added=$(jq '. | length' <<< "${BUILD_ADDED}")
+        build_added=$(jq '. | length' "${BUILD_ADDED}")
         echo "Build packages added: ${build_added}"
 
         # shellcheck disable=SC2153
-        build_modified=$(jq '. | length' <<< "${BUILD_MODIFIED}")
+        build_modified=$(jq '. | length' "${BUILD_MODIFIED}")
         echo "Build packages modified: ${build_modified}"
 
         # shellcheck disable=SC2153
-        run_added=$(jq '. | length' <<< "${RUN_ADDED}")
+        run_added=$(jq '. | length' "${RUN_ADDED}")
         echo "Run packages added: ${run_added}"
 
         # shellcheck disable=SC2153
-        run_modified=$(jq '. | length' <<< "${RUN_MODIFIED}")
+        run_modified=$(jq '. | length' "${RUN_MODIFIED}")
         echo "Run packages modified: ${run_modified}"
 
         if [ "${build_added}" -eq 0 ] && [ "${build_modified}" -eq 0 ] && [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
@@ -325,10 +331,10 @@ jobs:
         fi
 
       env:
-        BUILD_ADDED: ${{ needs.diff.outputs.build_added }}
-        BUILD_MODIFIED: ${{ needs.diff.outputs.build_modified }}
-        RUN_ADDED: ${{ needs.diff.outputs.run_added }}
-        RUN_MODIFIED: ${{ needs.diff.outputs.run_modified }}
+        BUILD_ADDED: "/github/workspace/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+        BUILD_MODIFIED: "/github/workspace/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+        RUN_ADDED: "/github/workspace/${{ env.RUN_DIFF_ADDED_FILENAME }}"
+        RUN_MODIFIED: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
 
   run_if_packages_changed:
     name: Run If Packages Changed
@@ -468,12 +474,12 @@ jobs:
       with:
         build_image: "paketobuildpacks/build-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
         run_image: "paketobuildpacks/run-${{ steps.repo_name.outputs.registry_repo_name }}:${{ steps.tag.outputs.tag }}"
-        build_packages_added: ${{ needs.diff.outputs.build_added }}
-        build_packages_modified: ${{ needs.diff.outputs.build_modified }}
-        build_packages_removed_with_force: ${{ needs.diff.outputs.build_removed_with_force }}
-        run_packages_added: ${{ needs.diff.outputs.run_added }}
-        run_packages_modified: ${{ needs.diff.outputs.run_modified }}
-        run_packages_removed_with_force: ${{ needs.diff.outputs.run_removed_with_force }}
+        build_packages_added: "/github/workspace/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+        build_packages_modified: "/github/workspace/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+        build_packages_removed_with_force: "/github/workspace/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
+        run_packages_added: "/github/workspace/${{ env.RUN_DIFF_ADDED_FILENAME }}"
+        run_packages_modified: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
+        run_packages_removed_with_force: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
         patched_usns: ${{ needs.poll_usns.outputs.usns }}
 
     - name: Setup Release Assets
