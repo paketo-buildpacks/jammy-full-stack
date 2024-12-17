@@ -283,8 +283,8 @@ jobs:
            echo "packages_removed=false" >> "$GITHUB_OUTPUT"
          fi
       env:
-        BUILD_REMOVED: "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
-        RUN_REMOVED: "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
+        BUILD_REMOVED: "/github/workspace/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
+        RUN_REMOVED: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
 
   run_if_packages_removed_with_force:
     name: Run If Packages Removed With Force
@@ -331,10 +331,10 @@ jobs:
         fi
 
       env:
-        BUILD_ADDED: "${{ github.workspace }}/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
-        BUILD_MODIFIED: "${{ github.workspace }}/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
-        RUN_ADDED: "${{ github.workspace }}/${{ env.RUN_DIFF_ADDED_FILENAME }}"
-        RUN_MODIFIED: "${{ github.workspace }}/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
+        BUILD_ADDED: "/github/workspace/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+        BUILD_MODIFIED: "/github/workspace/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+        RUN_ADDED: "/github/workspace/${{ env.RUN_DIFF_ADDED_FILENAME }}"
+        RUN_MODIFIED: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
 
   run_if_packages_changed:
     name: Run If Packages Changed
