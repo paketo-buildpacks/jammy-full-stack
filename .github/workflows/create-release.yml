@@ -100,20 +100,20 @@ jobs:
         packages: ${{ steps.packages.outputs.packages }}
         last_usns: ${{ steps.patched.outputs.patched }}
 
-  stack_files_changed:
-    name: Determine If Stack Files Changed
-    runs-on: ubuntu-24.04
+  create_stack:
+    name: Create Stack
     needs: poll_usns
     if: ${{ ! ( needs.poll_usns.outputs.usns == '[]' && github.event_name == 'schedule' ) }}
     outputs:
       stack_files_changed: ${{ steps.compare.outputs.stack_files_changed }}
+    runs-on: ubuntu-24.04
     steps:
-    - name: Checkout With History
+    - name: Checkout
       uses: actions/checkout@v3
       with:
         fetch-depth: 0  # gets full history
 
-    - name: Compare With Previous Release
+    - name: Determine If Stack Files Changed
       id: compare
       run: |
         # shellcheck disable=SC2046
@@ -127,25 +127,6 @@ jobs:
           echo "${changed}"
           echo "stack_files_changed=true" >> "$GITHUB_OUTPUT"
         fi
-
-  run_if_stack_files_changed:
-    name: Run If Stack Files Changed
-    runs-on: ubuntu-24.04
-    needs: [stack_files_changed]
-    if: ${{ needs.stack_files_changed.outputs.stack_files_changed == 'true' }}
-    steps:
-    - name: Run if stack files changed
-      run: |
-        echo "stack files have changed"
-
-  create_stack:
-    name: Create Stack
-    needs: poll_usns
-    if: ${{ ! ( needs.poll_usns.outputs.usns == '[]' && github.event_name == 'schedule' ) }}
-    runs-on: ubuntu-24.04
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v3
 
     - name: Create stack
       id: create-stack
@@ -190,6 +171,7 @@ jobs:
     name: Diff Packages
     outputs:
       removed_with_force: ${{ steps.removed_with_force.outputs.packages_removed }}
+      packages_changed: ${{ steps.compare.outputs.packages_changed }}
     needs: [ create_stack ]
     runs-on: ubuntu-24.04
     steps:
@@ -252,6 +234,15 @@ jobs:
         modified_diff_file: "/github/workspace/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
         removed_diff_file: "/github/workspace/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
 
+    - name: Upload Build Diff Files
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-diff-files
+        path: |
+          "${{ github.workspace }}/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
+          "${{ github.workspace }}/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
+          "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
+
     - name: Compare Run Packages
       id: run_diff
       uses: paketo-buildpacks/github-config/actions/stack/diff-package-receipts@main
@@ -261,6 +252,16 @@ jobs:
         added_diff_file: "/github/workspace/${{ env.RUN_DIFF_ADDED_FILENAME }}"
         modified_diff_file: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
         removed_diff_file: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
+
+    - name: Upload Run Diff Files
+      uses: actions/upload-artifact@v4
+      with:
+        name: run-diff-files
+        path: |
+          "${{ github.workspace }}/${{ env.RUN_DIFF_ADDED_FILENAME }}"
+          "${{ github.workspace }}/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
+          "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
+
 
     - name: Fail If Packages Removed
       id: removed_with_force
@@ -286,24 +287,7 @@ jobs:
         BUILD_REMOVED: "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
         RUN_REMOVED: "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
 
-  run_if_packages_removed_with_force:
-    name: Run If Packages Removed With Force
-    needs: [ diff ]
-    runs-on: ubuntu-24.04
-    if: ${{ needs.diff.outputs.removed_with_force == 'true' }}
-    steps:
-    - name: Run if packages removed with force
-      run: |
-        echo "packages removed with user-provided force"
-
-  packages_changed:
-    name: Determine If Packages Changed
-    needs: [ diff ]
-    runs-on: ubuntu-24.04
-    outputs:
-      packages_changed: ${{ steps.compare.outputs.packages_changed }}
-    steps:
-    - name: Compare With Previous Release
+    - name: Determine If Packages Changed
       id: compare
       run: |
         # shellcheck disable=SC2153
@@ -335,16 +319,6 @@ jobs:
         BUILD_MODIFIED: "${{ github.workspace }}/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
         RUN_ADDED: "${{ github.workspace }}/${{ env.RUN_DIFF_ADDED_FILENAME }}"
         RUN_MODIFIED: "${{ github.workspace }}/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
-
-  run_if_packages_changed:
-    name: Run If Packages Changed
-    runs-on: ubuntu-24.04
-    needs: [packages_changed]
-    if: ${{ needs.packages_changed.outputs.packages_changed == 'true' }}
-    steps:
-    - name: Run if packages changed
-      run: |
-        echo "packages have changed"
 
   test:
     name: Acceptance Test
@@ -378,28 +352,19 @@ jobs:
     - name: Run Acceptance Tests
       run: ./scripts/test.sh
 
-  force_release_creation:
-    name: Force Release Creation
-    runs-on: ubuntu-24.04
-    if: ${{github.event.inputs.force == 'true'}}
-    steps:
-    - name: Signal force release creation
-      run: |
-        echo "Force release creation input set to true"
-
   release:
     name: Release
     runs-on: ubuntu-24.04
-    needs: [poll_usns, create_stack, diff, run_if_stack_files_changed, run_if_packages_changed, run_if_packages_removed_with_force, test, force_release_creation ]
-    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.run_if_packages_changed.result == 'success' || needs.run_if_stack_files_changed.result == 'success' || needs.force_release_creation.result == 'success' ) }}
+    needs: [poll_usns, create_stack, diff, test ]
+    if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && (needs.diff.outputs.packages_changed == 'true' || needs.create_stack.outputs.stack_files_changed == 'true' || github.event.inputs.force == 'true' ) }}
     steps:
     - name: Print Release Reasoning
       run: |
         printf "Diff Packages: %s\n" "${{ needs.diff.result }}"
         printf "Acceptance Tests: %s\n" "${{ needs.test.result }}"
-        printf "Run If Packages Changed: %s\n" "${{ needs.run_if_packages_changed.result }}"
-        printf "Run If Packages Removed With Force: %s\n" "${{ needs.run_if_packages_removed_with_force.result }}"
-        printf "Run If Stack Files Changed: %s\n" "${{ needs.run_if_stack_files_changed.result }}"
+        printf "Packages Changed: %s\n" "${{ needs.diff.outputs.packages_changed }}"
+        printf "Packages Removed With Force: %s\n" "${{ needs.diff.outputs.packages_removed }}"
+        printf "Run If Stack Files Changed: %s\n" "${{ needs.create_stack.outputs.stack_files_changed }}"
         printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
     - name: Checkout With History
@@ -426,6 +391,16 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: current-run-receipt
+
+    - name: Download Build Diff Files
+      uses: actions/download-artifact@v4
+      with:
+        name: build-diff-files
+
+    - name: Download Run Diff Files
+      uses: actions/download-artifact@v4
+      with:
+        name: run-diff-files
 
     - name: Increment Tag
       if: github.event.inputs.version == ''
@@ -544,8 +519,8 @@ jobs:
   failure:
     name: Alert on Failure
     runs-on: ubuntu-24.04
-    needs: [poll_usns, create_stack, diff, test, release, packages_changed, stack_files_changed]
-    if: ${{ always() && needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' || needs.packages_changed.result == 'failure' || needs.stack_files_changed.result == 'failure' }}
+    needs: [poll_usns, create_stack, diff, test, release, ]
+    if: ${{ always() && needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' }}
     steps:
     - name: File Failure Alert Issue
       uses: paketo-buildpacks/github-config/actions/issue/file@main
