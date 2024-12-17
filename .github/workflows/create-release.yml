@@ -239,9 +239,9 @@ jobs:
       with:
         name: build-diff-files
         path: |
-          "${{ github.workspace }}/${{ env.BUILD_DIFF_ADDED_FILENAME }}"
-          "${{ github.workspace }}/${{ env.BUILD_DIFF_MODIFIED_FILENAME }}"
-          "${{ github.workspace }}/${{ env.BUILD_DIFF_REMOVED_FILENAME }}"
+          ${{ env.BUILD_DIFF_ADDED_FILENAME }}
+          ${{ env.BUILD_DIFF_MODIFIED_FILENAME }}
+          ${{ env.BUILD_DIFF_REMOVED_FILENAME }}
 
     - name: Compare Run Packages
       id: run_diff
@@ -258,9 +258,9 @@ jobs:
       with:
         name: run-diff-files
         path: |
-          "${{ github.workspace }}/${{ env.RUN_DIFF_ADDED_FILENAME }}"
-          "${{ github.workspace }}/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
-          "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
+          ${{ env.RUN_DIFF_ADDED_FILENAME }}
+          ${{ env.RUN_DIFF_MODIFIED_FILENAME }}
+          ${{ env.RUN_DIFF_REMOVED_FILENAME }}
 
 
     - name: Fail If Packages Removed
