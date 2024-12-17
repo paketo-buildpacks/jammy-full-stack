@@ -456,6 +456,7 @@ jobs:
         run_packages_modified: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
         run_packages_removed_with_force: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
         patched_usns: ${{ needs.poll_usns.outputs.usns }}
+        release_body_file: "/github/workspace/release-body.md"
 
     - name: Setup Release Assets
       id: assets
@@ -512,7 +513,7 @@ jobs:
         tag_name: v${{ steps.tag.outputs.tag }}
         target_commitish: ${{ github.sha }}
         name: v${{ steps.tag.outputs.tag }}
-        body: ${{ steps.notes.outputs.release_body }}
+        body_file: "/github/workspace/release-body.md"
         draft: false
         assets: ${{ steps.assets.outputs.assets }}
 
