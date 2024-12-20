@@ -513,7 +513,7 @@ jobs:
         tag_name: v${{ steps.tag.outputs.tag }}
         target_commitish: ${{ github.sha }}
         name: v${{ steps.tag.outputs.tag }}
-        body_file: "/github/workspace/release-body.md"
+        body_filepath: "/github/workspace/release-body.md"
         draft: false
         assets: ${{ steps.assets.outputs.assets }}
 
