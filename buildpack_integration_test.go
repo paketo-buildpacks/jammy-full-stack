@@ -20,7 +20,7 @@ import (
 	"github.com/paketo-buildpacks/occam"
 	. "github.com/paketo-buildpacks/occam/matchers"
 	"github.com/paketo-buildpacks/packit/v2/pexec"
-	"github.com/paketo-buildpacks/packit/vacation"
+	"github.com/paketo-buildpacks/packit/v2/vacation"
 )
 
 const REGISTRY_IMAGE = "registry:2"
