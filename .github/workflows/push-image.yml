@@ -4,54 +4,187 @@ on:
   release:
     types:
     - published
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version of the stack to push'
+        required: false
+
 env:
-  REGISTRIES_FILENAME: "registries.json"
+  REGISTRIES_FILEPATH: "registries.json"
+  STACKS_FILEPATH: "images.json"
+  GCR_REGISTRY: "gcr.io"
+  GCR_USERNAME: "_json_key"
 
 jobs:
   preparation:
     name: Preparation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      DOCKERHUB_ORG: ${{ steps.set-dockerhub-org-namespace.outputs.DOCKERHUB_ORG}}
-      push_to_gcr: ${{ steps.parse_configs.outputs.push_to_gcr}}
-      push_to_dockerhub: ${{ steps.parse_configs.outputs.push_to_dockerhub}}
+      DOCKERHUB_ORG: ${{ steps.set-dockerhub-org-namespace.outputs.DOCKERHUB_ORG }}
+      push_to_gcr: ${{ steps.parse_configs.outputs.push_to_gcr }}
+      push_to_dockerhub: ${{ steps.parse_configs.outputs.push_to_dockerhub }}
+      tag: ${{ steps.event.outputs.tag }}
+      os_codename: ${{ steps.repo.outputs.os_codename }}
+      os_name: ${{ steps.repo.outputs.os_name }}
+      repo_type: ${{ steps.repo.outputs.repo_type }}
+      stacks: ${{ steps.get-stacks.outputs.stacks }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Parse Event
+      id: event
+      run: |
+        set -euo pipefail
+        shopt -s inherit_errexit
+
+        # If the workflow has been triggered from dispatch event
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+        else #The workflow has been triggered from publish event
+          echo "tag=$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Set matrix
       id: set-matrix
       run: |
-        release_version="$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)"
+        stacks=$(jq -c '.images | .[]' ${STACKS_FILEPATH})
+        version="${{ steps.event.outputs.tag }}"
+        os_name=$( jq -r '.os_name' ${STACKS_FILEPATH} )
+        os_codename=$( jq -r '.os_codename' ${STACKS_FILEPATH} )
+        repo_type=$( jq -r '.repo_type' ${STACKS_FILEPATH} )
 
-        # Strip off the org and slash from repo name
-        # paketo-buildpacks/repo-name --> repo-name
-        repo_name=$(echo "${{ github.repository }}" | sed 's/^.*\///')
+        # Start with an empty array
+        asset_names=$(jq -n -c '[]')
 
-        asset_prefix="${repo_name}-${release_version}-"
-        oci_images=$(jq -c --arg asset_prefix "$asset_prefix" '[.release.assets[].name | select(endswith(".oci")) | split(".oci") | .[0] | split($asset_prefix) | .[1]]' "${GITHUB_EVENT_PATH}")
-        printf "matrix=%s\n" "${oci_images}" >> "$GITHUB_OUTPUT"
+        for stack in $stacks; do
+          stack_name=$(echo "$stack" | jq -r '.name')
+          stack_type=$(echo "$stack" | jq -r '.stack_type // ""')
+
+          # .oci artifacts for the run image
+          run_image=$(echo "$stack" | jq -r '.run_image')
+          build_image=$(echo "$stack" | jq -r '.build_image')
+
+          if [ $pattern_assets_prefix == "os_codename-stack_type-repo_type" ]; then
+            asset_prefix="${os_codename}-${stack_type}-${repo_type}"
+          elif [ $pattern_assets_prefix == "os_codename-repo_type" ]; then
+            asset_prefix="${os_codename}-${repo_type}"
+          fi
+
+          pattern_assets_prefix=$(echo "$stack" | jq -r '.pattern_assets_prefix // ""')
+          if [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
+            run_image_asset_prefix="${os_name}-${os_codename}-${run_image}-${stack_type}-${version}"
+            build_image_asset_prefix="${os_name}-${os_codename}-${build_image}-${stack_type}-${version}"
+          elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-version-arch" ]]; then
+            run_image_asset_prefix="${os_name}-${os_codename}-${run_image}-${version}"
+            build_image_asset_prefix="${os_name}-${os_codename}-${build_image}-${version}"
+          elif [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
+            run_image_asset_prefix="${os_codename}-${stack_type}-${repo_type}-${version}-${run_image}"
+            build_image_asset_prefix="${os_codename}-${stack_type}-${repo_type}-${version}-${build_image}"
+          fi
+
+          pattern_image_registry_name=$(echo "$stack" | jq -r '.pattern_image_registry_name // ""')
+          if [ $pattern_image_registry_name == "os_name-os_codename-build_image_run_image-stack_type" ]; then
+            build_image_registry_name="${os_name}-${os_codename}-${build_image}-${stack_type}"
+            run_image_registry_name="${os_name}-${os_codename}-${run_image}-${stack_type}"
+          elif [ $pattern_image_registry_name == "os_name-os_codename-build_image_run_image" ]; then
+            build_image_registry_name="${os_name}-${os_codename}-${build_image}"
+            run_image_registry_name="${os_name}-${os_codename}-${run_image}"
+          elif [ $pattern_image_registry_name == "build_image_run_image-os_codename-stack_type" ]; then
+            build_image_registry_name="${build_image}-${os_codename}-${stack_type}"
+            run_image_registry_name="${run_image}-${os_codename}-${stack_type}"
+          fi
+
+          asset_names="$(jq -c \
+          --arg image_filepath "image-files" \
+          --arg stack_name "${stack_name}" \
+          --arg run_image_asset_prefix "${run_image_asset_prefix}" \
+          --arg run_image_registry_name "${run_image_registry_name}" \
+          '. += [
+              {
+                "name": $run_image_asset_prefix,
+                "path": ($image_filepath + "/" + "current-run-image-" + $stack_name + "/run" + ".oci"),
+                "registry_name": $run_image_registry_name
+              }
+            ]' <<<"${asset_names}")"
+
+          # .oci artifacts for the build image
+          create_build_image=$(echo "$stack" | jq -r '.create_build_image // false')
+          if [[ $create_build_image == true ]]; then
+
+            asset_names="$(jq -c \
+              --arg image_filepath "image-files" \
+              --arg stack_name "${stack_name}" \
+              --arg build_image_asset_prefix "${build_image_asset_prefix}" \
+              --arg build_image_registry_name "${build_image_registry_name}" \
+              '. += [
+                  {
+                    "name": $build_image_asset_prefix,
+                    "path": ($image_filepath + "/" + "current-build-image-" + $stack_name + "/build" + ".oci"),
+                    "registry_name": $build_image_registry_name
+
+                  }
+                ]' <<<"${asset_names}")"
+          fi
+        done
+
+        release_version="${{ steps.event.outputs.tag }}"
+        release_info=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/tags/v${release_version}")
+        oci_release_assets=$(echo "$release_info" | jq -c \
+          '[ .assets[]
+            | select(.name | endswith(".oci"))
+            | {name: (.name | split(".oci") | .[0]), oci_asset_url: .url}
+          ]')
+
+        oci_release_assets_length=$(echo "$oci_release_assets" | jq 'length')
+        asset_names_length=$(echo "$asset_names" | jq 'length')
+
+        if [ "$oci_release_assets_length" != "$asset_names_length" ]; then
+          echo "Produced assets do not match the release assets."
+          exit 1
+        fi
+
+        matrix=$(jq -n -c --argjson a "$oci_release_assets" --argjson b "$asset_names" '
+          $a | map(
+            . as $oci_item
+            | ($b[] | select(.name == $oci_item.name)) as $asset_item
+            | $oci_item + $asset_item
+          )
+        ')
+
+        matrix_length=$(echo "$matrix" | jq 'length')
+        if [ "$matrix_length" != "$asset_names_length" ]; then
+          echo "Produced assets do not match the release assets."
+          exit 1
+        fi
+
+        echo "matrix=${matrix}"
+        echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
 
     - name: Set DOCKERHUB_ORG namespace
       id: set-dockerhub-org-namespace
-      run: echo "DOCKERHUB_ORG=${GITHUB_REPOSITORY_OWNER//-/}" >> "$GITHUB_OUTPUT"
+      run: |
+        echo "DOCKERHUB_ORG=${GITHUB_REPOSITORY_OWNER//-/}" >> "$GITHUB_OUTPUT"
 
     - name: Parse Configs
       id: parse_configs
-
       run: |
-        registries_filename="${{ env.REGISTRIES_FILENAME }}"
+        registries_filepath="${{ env.REGISTRIES_FILEPATH }}"
 
         push_to_dockerhub=true
         push_to_gcr=false
 
-        if [[ -f $registries_filename ]]; then
-          if jq 'has("dockerhub")' $registries_filename > /dev/null; then
-            push_to_dockerhub=$(jq '.dockerhub' $registries_filename)
+        if [[ -f $registries_filepath ]]; then
+
+          if jq 'has("dockerhub")' $registries_filepath > /dev/null; then
+            push_to_dockerhub=$(jq '.dockerhub' $registries_filepath)
           fi
-          if jq 'has("GCR")' $registries_filename > /dev/null; then
-            push_to_gcr=$(jq '.GCR' $registries_filename)
+
+          if jq 'has("GCR")' $registries_filepath > /dev/null; then
+            push_to_gcr=$(jq '.GCR' $registries_filepath)
           fi
         fi
 
@@ -68,69 +201,68 @@ jobs:
         oci_image: ${{ fromJSON(needs.preparation.outputs.matrix) }}
 
     steps:
-    - name: Parse Event
-      id: event
-      run: |
-        echo "tag=$(jq -r '.release.tag_name' "${GITHUB_EVENT_PATH}" | sed s/^v//)" >> "$GITHUB_OUTPUT"
-        echo "${{ matrix.oci_image }}_download_url=$(jq -r '.release.assets[] | select(.name | endswith("${{ matrix.oci_image }}.oci")) | .url' "${GITHUB_EVENT_PATH}")" >> "$GITHUB_OUTPUT"
-
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Download ${{ matrix.oci_image }} Image
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Download ${{ matrix.oci_image.name }} Image
       uses: paketo-buildpacks/github-config/actions/release/download-asset@main
       with:
-        url: ${{ steps.event.outputs[format('{0}_download_url', matrix.oci_image)] }}
-        output: "/github/workspace/${{ matrix.oci_image }}.oci"
+        url: "${{ matrix.oci_image.oci_asset_url }}"
+        output: "./saved_image.oci"
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
-    - name: Get Registry Repo Name
-      id: registry-repo
-      run: |
-        # Strip off the Github org prefix and 'stack' suffix from repo name
-        # paketo-buildpacks/some-name-stack --> some-name
-        echo "name=$(echo "${{ github.repository }}" | sed 's/^.*\///' | sed 's/\-stack$//')" >> "$GITHUB_OUTPUT"
+    - name: Docker login docker.io
+      uses: docker/login-action@v3
+      if: ${{ needs.preparation.outputs.push_to_dockerhub == 'true' }}
+      with:
+        username: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
+        password: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_PASSWORD }}
+        registry: docker.io
 
-    - name: Push ${{ matrix.oci_image }} Image to DockerHub
+    - name: Docker login gcr.io
+      uses: docker/login-action@v3
+      if: ${{ needs.preparation.outputs.push_to_gcr == 'true' }}
+      with:
+        username: ${{ env.GCR_USERNAME }}
+        password: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
+        registry: ${{ env.GCR_REGISTRY }}
+
+    - name: Push ${{ matrix.oci_image.name }} Image to registries
       id: push
       env:
-        DOCKERHUB_USERNAME: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
-        DOCKERHUB_PASSWORD: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_PASSWORD }}
         DOCKERHUB_ORG: "${{ needs.preparation.outputs.DOCKERHUB_ORG }}"
-        GCR_USERNAME: _json_key
-        GCR_PASSWORD: ${{ secrets.GCR_PUSH_BOT_JSON_KEY }}
         GCR_PROJECT: "${{ github.repository_owner }}"
       run: |
+        # Ensure other scripts can access the .bin directory to install their own
+        # tools after we install them as whatever user we are.
+        mkdir -p ./.bin/
+        chmod 777 ./.bin/
 
-        if [ "${{ needs.preparation.outputs.push_to_dockerhub }}" == "true" ]; then
-          echo "${DOCKERHUB_PASSWORD}" | sudo skopeo login --username "${DOCKERHUB_USERNAME}" --password-stdin index.docker.io
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
-        fi
+        image_name_registry=${{ matrix.oci_image.registry_name }}
 
-        if [ "${{ needs.preparation.outputs.push_to_gcr }}" == "true" ]; then
-          echo "${GCR_PASSWORD}" | sudo skopeo login --username "${GCR_USERNAME}" --password-stdin gcr.io
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:${{ steps.event.outputs.tag }}"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}-${{ steps.registry-repo.outputs.name }}:latest"
-        fi
-        # If the repository name contains 'bionic', let's push it to legacy image locations as well:
-        #    paketobuildpacks/{build/run}:{version}-{variant}
-        #    paketobuildpacks/{build/run}:{version}-{variant}-cnb
-        #    paketobuildpacks/{build/run}:{variant}-cnb
-        #    paketobuildpacks/{build/run}:{variant}
-        registry_repo="${{ steps.registry-repo.outputs.name }}"
-        if [[ ${registry_repo} == "bionic"-* ]];
-          then
-          # Strip the final part from a repo name after the `-`
-          # bionic-tiny --> tiny
-          variant="${registry_repo#bionic-}"
+        ./scripts/publish.sh \
+          --image-ref "docker.io/${DOCKERHUB_ORG}/${image_name_registry}:${{ needs.preparation.outputs.tag }}" \
+          --image-ref "docker.io/${DOCKERHUB_ORG}/${image_name_registry}:latest" \
+          --image-archive "./saved_image.oci"
 
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${{ steps.event.outputs.tag }}-${variant}"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${{ steps.event.outputs.tag }}-${variant}-cnb"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}-cnb"
-          sudo skopeo copy "oci-archive:${GITHUB_WORKSPACE}/${{ matrix.oci_image }}.oci" "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}"
+        if [ "${{ needs.preparation.outputs.push_to_gcr }}" = "true" ]; then
 
-          sudo skopeo copy "docker://${DOCKERHUB_ORG}/${{ matrix.oci_image }}:${variant}-cnb" "docker://gcr.io/${GCR_PROJECT}/${{ matrix.oci_image }}:${variant}-cnb"
+          platforms=$(docker manifest inspect "docker.io/${DOCKERHUB_ORG}/${image_name_registry}:${{ needs.preparation.outputs.tag }}" |
+            jq -r '[.manifests[].platform] | [.[] | .os + "/" + .architecture] | join(",")')
+
+          echo "FROM docker.io/${DOCKERHUB_ORG}/${image_name_registry}:${{ needs.preparation.outputs.tag }}" | \
+          docker buildx build -f - . \
+            --tag "${{ env.GCR_REGISTRY }}/${GCR_PROJECT}/${image_name_registry}:${{ needs.preparation.outputs.tag }}" \
+            --tag "${{ env.GCR_REGISTRY }}/${GCR_PROJECT}/${image_name_registry}:latest" \
+            --platform "$platforms" \
+            --provenance=false \
+            --push
         fi
 
   failure:

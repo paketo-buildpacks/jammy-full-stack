@@ -1,0 +1,21 @@
+{
+  "support_usns": true,
+  "receipts_show_limit": 16,
+  "platforms": ["linux/amd64", "linux/arm64"],
+  "os_name": "ubuntu",
+  "os_codename": "jammy",
+  "repo_type": "stack",
+  "images": [
+    {
+      "name": "jammy-full",
+      "config_dir": "stack",
+      "output_dir": "build",
+      "build_image": "build",
+      "run_image": "run",
+      "create_build_image": true,
+      "stack_type": "full",
+      "pattern_image_registry_name": "build_image_run_image-os_codename-stack_type",
+      "pattern_assets_prefix": "os_codename-stack_type-repo_type-version-arch-build_image_run_image"
+    }
+  ]
+}

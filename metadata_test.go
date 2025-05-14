@@ -57,10 +57,22 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			indexManifest, err := index.IndexManifest()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(indexManifest.Manifests).To(HaveLen(1))
-			Expect(indexManifest.Manifests[0].Platform).To(Equal(&v1.Platform{
+			Expect(indexManifest.Manifests).To(HaveLen(2))
+
+			platforms := []v1.Platform{}
+			for _, manifest := range indexManifest.Manifests {
+				platforms = append(platforms, v1.Platform{
+					Architecture: manifest.Platform.Architecture,
+					OS:           manifest.Platform.OS,
+				})
+			}
+			Expect(platforms).To(ContainElement(v1.Platform{
 				OS:           "linux",
 				Architecture: "amd64",
+			}))
+			Expect(platforms).To(ContainElement(v1.Platform{
+				OS:           "linux",
+				Architecture: "arm64",
 			}))
 
 			image, err := index.Image(indexManifest.Manifests[0].Digest)
@@ -253,10 +265,22 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 			indexManifest, err := index.IndexManifest()
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(indexManifest.Manifests).To(HaveLen(1))
-			Expect(indexManifest.Manifests[0].Platform).To(Equal(&v1.Platform{
+			Expect(indexManifest.Manifests).To(HaveLen(2))
+
+			platforms := []v1.Platform{}
+			for _, manifest := range indexManifest.Manifests {
+				platforms = append(platforms, v1.Platform{
+					Architecture: manifest.Platform.Architecture,
+					OS:           manifest.Platform.OS,
+				})
+			}
+			Expect(platforms).To(ContainElement(v1.Platform{
 				OS:           "linux",
 				Architecture: "amd64",
+			}))
+			Expect(platforms).To(ContainElement(v1.Platform{
+				OS:           "linux",
+				Architecture: "arm64",
 			}))
 
 			image, err := index.Image(indexManifest.Manifests[0].Digest)
@@ -410,7 +434,6 @@ func testMetadata(t *testing.T, context spec.G, it spec.S) {
 				ContainSubstring(`BUG_REPORT_URL="https://github.com/paketo-buildpacks/jammy-full-stack/issues/new"`),
 			)))
 		})
-
 		Expect(runReleaseDate).To(Equal(buildReleaseDate))
 	})
 }

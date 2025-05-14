@@ -2,7 +2,7 @@ id = "io.buildpacks.stacks.jammy"
 homepage = "https://github.com/paketo-buildpacks/jammy-full-stack"
 maintainer = "Paketo Buildpacks"
 
-platforms = ["linux/amd64"]
+platforms = ["linux/amd64", "linux/arm64"]
 
 [build]
   description = "ubuntu:jammy with compilers and common libraries and utilities"
@@ -12,6 +12,8 @@ platforms = ["linux/amd64"]
   uid = 1001
 
   [build.args]
+    architecture = "amd64"
+
     sources = """
     deb http://archive.ubuntu.com/ubuntu jammy main universe multiverse
     deb http://archive.ubuntu.com/ubuntu jammy-updates main universe multiverse
@@ -201,6 +203,15 @@ platforms = ["linux/amd64"]
     zip \
     """
 
+  [build.platforms."linux/arm64".args]
+    architecture = "arm64"
+
+    sources = """
+    deb http://ports.ubuntu.com/ubuntu-ports/ jammy main universe multiverse
+    deb http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main universe multiverse
+    deb http://ports.ubuntu.com/ubuntu-ports/ jammy-security main universe multiverse
+    """
+
 [run]
   description = "ubuntu:jammy with common libraries and utilities"
   dockerfile = "./run.Dockerfile"
@@ -209,6 +220,8 @@ platforms = ["linux/amd64"]
   uid = 1002
 
   [run.args]
+    architecture = "amd64"
+
     sources = """
     deb http://archive.ubuntu.com/ubuntu jammy main universe multiverse
     deb http://archive.ubuntu.com/ubuntu jammy-updates main universe multiverse
@@ -334,4 +347,13 @@ platforms = ["linux/amd64"]
     uuid \
     wget \
     zip \
+    """
+
+  [run.platforms."linux/arm64".args]
+    architecture = "arm64"
+
+    sources = """
+    deb http://ports.ubuntu.com/ubuntu-ports/ jammy main universe multiverse
+    deb http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main universe multiverse
+    deb http://ports.ubuntu.com/ubuntu-ports/ jammy-security main universe multiverse
     """
