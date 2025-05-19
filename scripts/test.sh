@@ -3,26 +3,29 @@
 set -eu
 set -o pipefail
 
-readonly PROG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly STACK_DIR="$(cd "${PROG_DIR}/.." && pwd)"
-readonly STACK_IMAGES_JSON_PATH="${STACK_DIR}/images.json"
-readonly INTEGRATION_JSON="${STACK_DIR}/integration.json"
+readonly SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly ROOT_DIR="$(cd "${SCRIPTS_DIR}/.." && pwd)"
+readonly STACK_IMAGES_JSON_PATH="${ROOT_DIR}/images.json"
+readonly INTEGRATION_JSON="${ROOT_DIR}/integration.json"
 declare STACK_IMAGES
 
 # shellcheck source=SCRIPTDIR/.util/tools.sh
-source "${PROG_DIR}/.util/tools.sh"
+source "${SCRIPTS_DIR}/.util/tools.sh"
 
 # shellcheck source=SCRIPTDIR/.util/print.sh
-source "${PROG_DIR}/.util/print.sh"
+source "${SCRIPTS_DIR}/.util/print.sh"
 
 function main() {
-  local clean token test_only_stacks registryPort registryPid localRegistry setupLocalRegistry
+  local clean token test_only_stacks validate_stack_builds
+  local registryPort registryPid localRegistry setupLocalRegistry
+
   help=""
   clean="false"
   token=""
   test_only_stacks=""
   registryPid=""
   setupLocalRegistry=""
+  validate_stack_builds="false"
 
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
@@ -44,6 +47,11 @@ function main() {
       --test-only-stacks)
         test_only_stacks="${2}"
         shift 2
+        ;;
+
+      --validate-stack-builds)
+        validate_stack_builds="true"
+        shift 1
         ;;
 
       "")
@@ -100,15 +108,22 @@ function main() {
 
   stack_output_builds_exist=$(stack_builds_exist)
 
+  if [[ "${stack_output_builds_exist}" == "false" && "${validate_stack_builds}" == "true" ]]; then
+    util::print::error "Stack builds are not valid."
+    exit 1
+  fi
+
   if [[ "${stack_output_builds_exist}" == "false" ]]; then
     util::print::title "Creating stack..."
     while read -r image; do
       config_dir=$(echo "${image}" | jq -r '.config_dir')
       output_dir=$(echo "${image}" | jq -r '.output_dir')
-      "${STACK_DIR}/scripts/create.sh" \
+      "${ROOT_DIR}/scripts/create.sh" \
         --stack-dir "${config_dir}" \
         --build-dir "${output_dir}"
     done <<<"$STACK_IMAGES"
+  else
+    util::print::title "Stack builds already exist..."
   fi
 
   if [[ -f $INTEGRATION_JSON ]]; then
@@ -120,6 +135,7 @@ function main() {
     registryPid=$(local::registry::start $registryPort)
     localRegistry="127.0.0.1:$registryPort"
     export REGISTRY_URL="${localRegistry}"
+    util::print::info "Local registry is running with url: ${localRegistry}"
   fi
 
   tests::run
@@ -146,10 +162,10 @@ function usage() {
     run_image=$(echo "${image}" | jq -r '.run_image')
 
     if [ $create_build_image == 'true' ]; then
-      oci_images_arr+=("${STACK_DIR}/${output_dir}/${build_image}.oci")
+      oci_images_arr+=("${ROOT_DIR}/${output_dir}/${build_image}.oci")
     fi
 
-    oci_images_arr+=("${STACK_DIR}/${output_dir}/${run_image}.oci")
+    oci_images_arr+=("${ROOT_DIR}/${output_dir}/${run_image}.oci")
 
   done <<<"$STACK_IMAGES"
 
@@ -163,10 +179,11 @@ ${joined_oci_images}
 if they exist. Otherwise, first runs create.sh to create them.
 
 OPTIONS
-  --clean          -c  clears contents of stack output directory before running tests
-  --token <token>  -t  Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
-  --test-only-stacks   Runs the tests of the stacks passed to this argument (e.g. java-8 nodejs-16) (optional)
-  --help           -h  prints the command usage
+  --clean          -c     Clears contents of stack output directory before running tests
+  --token <token>  -t     Token used to download assets from GitHub (e.g. jam, pack, etc) (optional)
+  --test-only-stacks      Runs the tests of the stacks passed to this argument (e.g. java-8 nodejs-16) (optional)
+  --validate-stack-builds Validates that the stack builds are present before running tests (optional)
+  --help           -h     Prints the command usage
 USAGE
 }
 
@@ -175,17 +192,17 @@ function tools::install() {
   token="${1}"
 
   util::tools::jam::install \
-    --directory "${STACK_DIR}/.bin" \
+    --directory "${ROOT_DIR}/.bin" \
     --token "${token}"
 
   util::tools::pack::install \
-    --directory "${STACK_DIR}/.bin" \
+    --directory "${ROOT_DIR}/.bin" \
     --token "${token}"
 
   util::tools::skopeo::check
 
   util::tools::crane::install \
-    --directory "${STACK_DIR}/.bin" \
+    --directory "${ROOT_DIR}/.bin" \
     --token "${token}"
 }
 
@@ -193,8 +210,9 @@ function tests::run() {
   util::print::title "Run Stack Acceptance Tests"
 
   export CGO_ENABLED=0
+  export JAM_PATH="${ROOT_DIR}/.bin/jam"
   testout=$(mktemp)
-  pushd "${STACK_DIR}" > /dev/null
+  pushd "${ROOT_DIR}" > /dev/null
     if GOMAXPROCS="${GOMAXPROCS:-4}" go test -count=1 -timeout 0 ./... -v -run Acceptance | tee "${testout}"; then
       util::tools::tests::checkfocus "${testout}"
       util::print::success "** GO Test Succeeded **"
@@ -210,7 +228,12 @@ function stack_builds_exist() {
 
   while IFS= read -r image; do
     stack_output_dir=$(echo "${image}" | jq -r '.output_dir')
-    if ! [[ -f "${STACK_DIR}/${stack_output_dir}/build.oci" ]] || ! [[ -f "${STACK_DIR}/${stack_output_dir}/run.oci" ]]; then
+    is_build_image_necessary=$(echo "${image}" | jq -r '.create_build_image // false')
+
+    if ! [[ -f "${ROOT_DIR}/${stack_output_dir}/run.oci" ]]; then
+      stack_output_builds_exist="false"
+    fi
+    if [[ ! -f "${ROOT_DIR}/${stack_output_dir}/build.oci" && "${is_build_image_necessary}" == true ]]; then
       stack_output_builds_exist="false"
     fi
   done <<<"$STACK_IMAGES"
@@ -221,7 +244,7 @@ function stack_builds_exist() {
 function clean::stacks(){
   while read -r image; do
     output_dir=$(echo "${image}" | jq -r '.output_dir')
-    rm -rf "${STACK_DIR}/${output_dir}"
+    rm -rf "${ROOT_DIR}/${output_dir}"
   done <<<"$STACK_IMAGES"
 }
 
