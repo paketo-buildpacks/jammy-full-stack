@@ -1256,29 +1256,30 @@ jobs:
             # SBOM for the run image
             run_image=$(echo "$stack" | jq -r '.run_image')
             if [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
-              asset_prefix="${os_name}-${os_codename}-${run_image}-${stack_type}-${version}"
+              sbom_asset_name_run_image=$( echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$run_image"'", "'"$stack_type"'",
+              "'"$version"'", "'"$arch_prefix"'", "receipt.cyclonedx.json" ]' | jq -r 'map(select(length > 0)) | join("-")' )
+              sbom_asset_name_build_image=$( echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$build_image"'", "'"$stack_type"'", "'"$version"'",
+              "'"$arch_prefix"'", "receipt.cyclonedx.json" ]' | jq -r 'map(select(length > 0)) | join("-")')
             elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-version-arch" ]]; then
-              asset_prefix="${os_name}-${os_codename}-${run_image}-${version}"
+              sbom_asset_name_run_image=$( echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$run_image"'", "'"$version"'",
+              "'"$arch_prefix"'", "receipt.cyclonedx.json" ]' | jq -r 'map(select(length > 0)) | join("-")' )
+              sbom_asset_name_build_image=$(echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$build_image"'", "'"$version"'", "'"$arch_prefix"'",
+              "receipt.cyclonedx.json" ]' | jq -r 'map(select(length > 0)) | join("-")')
             elif [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
-              asset_prefix="${os_codename}-${stack_type}-${repo_type}-${version}-${run_image}"
+              sbom_asset_name_run_image=$(echo '[ "'"$os_codename"'", "'"$stack_type"'", "'"$repo_type"'", "'"$version"'", "'"$arch_prefix"'",
+              "'"$run_image"'", "receipt.cyclonedx.json"]' | jq -r 'map(select(length > 0)) | join("-")')
+              sbom_asset_name_build_image=$(echo '[ "'"$os_codename"'", "'"$stack_type"'", "'"$repo_type"'", "'"$version"'", "'"$arch_prefix"'",
+              "'"$build_image"'", "receipt.cyclonedx.json" ]' | jq -r 'map(select(length > 0)) | join("-")')
             fi
-
-            sbom_asset_name=$(
-              echo '[
-                  "'"$asset_prefix"'",
-                  "'"$arch_prefix"'",
-                  "receipt.cyclonedx.json"
-                ]' | jq -r 'map(select(length > 0)) | join("-")'
-            )
 
             assets="$(jq -c \
             --arg sbom_filepath "receipt-files" \
             --arg stack_name "${stack_name}" \
             --arg arch "${arch_name}" \
-            --arg sbom_asset_name "${sbom_asset_name}" \
+            --arg sbom_asset_name "${sbom_asset_name_run_image}" \
             '. += [
                 {
-                  "path": ($sbom_filepath + "/" + $arch + "-" + "current-run-receipt"+ "-" + $stack_name ),
+                  "path": ($sbom_filepath + "/" + $arch + "-" + "current-run-receipt"+ "-" + $stack_name),
                   "name": $sbom_asset_name,
                   "content_type": "text/plain"
                 }
@@ -1286,33 +1287,14 @@ jobs:
 
             # SBOM for the build image
             if [[ "$create_build_image" == "true" ]]; then
-
-              asset_prefix=""
-              build_image=$(echo "$stack" | jq -r '.build_image')
-              if [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
-                asset_prefix="${os_name}-${os_codename}-${build_image}-${stack_type}-${version}"
-              elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-version-arch" ]]; then
-                asset_prefix="${os_name}-${os_codename}-${build_image}-${version}"
-              elif [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
-                asset_prefix="${os_codename}-${stack_type}-${repo_type}-${version}-${build_image}"
-              fi
-
-              sbom_asset_name=$(
-                echo '[
-                    "'"$asset_prefix"'",
-                    "'"$arch_prefix"'",
-                    "receipt.cyclonedx.json"
-                  ]' | jq -r 'map(select(length > 0)) | join("-")'
-              )
-
               assets="$(jq -c \
               --arg sbom_filepath "receipt-files" \
               --arg stack_name "${stack_name}" \
               --arg arch "${arch_name}" \
-              --arg sbom_asset_name "${sbom_asset_name}" \
+              --arg sbom_asset_name "${sbom_asset_name_build_image}" \
               '. += [
                   {
-                    "path": ($sbom_filepath + "/" + $arch + "-" + "current-build-receipt"+ "-" + $stack_name ),
+                    "path": ($sbom_filepath + "/" + $arch + "-" + "current-build-receipt"+ "-" + $stack_name),
                     "name": $sbom_asset_name,
                     "content_type": "text/plain"
                   }
@@ -1336,6 +1318,8 @@ jobs:
               asset_prefix="${os_name}-${os_codename}-${stack_type}-${version}"
             elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-version-arch" ]]; then
               asset_prefix="${os_name}-${os_codename}-${version}"
+            elif [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
+              asset_prefix="${os_codename}-${stack_type}-${repo_type}-${version}"
             fi
 
             for arch in $archs; do
