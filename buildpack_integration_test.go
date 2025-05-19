@@ -58,6 +58,9 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 			Execute(REGISTRY_IMAGE)
 		Expect(err).NotTo(HaveOccurred())
 
+		name, err = occam.RandomName()
+		Expect(err).NotTo(HaveOccurred())
+
 		buildpackStore := occam.NewBuildpackStore()
 
 		buildPlanBuildpack, err = buildpackStore.Get.
