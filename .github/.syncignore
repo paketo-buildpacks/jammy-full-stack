@@ -1,4 +1,1 @@
 CODEOWNERS
-workflows/create-release.yml
-workflows/push-image.yml
-workflows/test-pull-request.yml
