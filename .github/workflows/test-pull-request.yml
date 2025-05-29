@@ -25,7 +25,7 @@ jobs:
     - name: Create stack
       id: create-stack
       run: |
-        scripts/create.sh
+        ./scripts/create.sh
 
     - name: Run Acceptance Tests
       run: ./scripts/test.sh
