@@ -2,7 +2,7 @@ name: Create Release
 
 on:
   schedule:
-    - cron: '27 2,14 * * *' # daily at 02:27 and 14:27 UTC
+    - cron: '27 2,14 * * *'  # daily at 02:27 and 14:27 UTC
   push:
     branches:
     - main
@@ -463,7 +463,7 @@ jobs:
     - name: Get current run image hash code of ${{ matrix.stacks.name }} stack with arch ${{ matrix.arch.name }}
       run: |
         skopeo inspect --format "{{.Digest}}" ${{ matrix.stacks.base_run_container_image }} > ./hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-    
+
     - name: Create empty image hash codes
       run: |
         if [ ! -f "./hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}" ]; then
@@ -478,7 +478,7 @@ jobs:
       with:
         name: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-        if-no-files-found: error 
+        if-no-files-found: error
 
     - name: Upload build image hash code
       if: ${{ matrix.stacks.create_build_image == true }}
@@ -508,11 +508,11 @@ jobs:
     name: Determine If Stack Files Changed
     runs-on: ubuntu-22.04
     needs: [ preparation, poll_usns, poll_images ]
-    if: ${{ 
+    if: ${{
       !failure() && !cancelled() &&
       !(
-        (needs.poll_images.outputs.images_need_update == null && 
-        needs.poll_usns.outputs.usns == null ) && 
+        (needs.poll_images.outputs.images_need_update == null &&
+        needs.poll_usns.outputs.usns == null ) &&
         github.event_name == 'schedule'
       ) }}
     outputs:
@@ -541,7 +541,7 @@ jobs:
   usns_or_sha_changed:
     name: USNs or SHAs have changed
     runs-on: ubuntu-22.04
-    outputs: 
+    outputs:
       changed: ${{ steps.usns_or_sha_changed.outputs.changed }}
     needs: [ preparation, poll_usns, poll_images ]
     if: ${{ !failure() && !cancelled() }}
@@ -626,14 +626,14 @@ jobs:
       with:
         name: current-build-receipt-${{ matrix.stacks.name }}
         path: "*current-build-receipt-${{ matrix.stacks.name }}"
-        if-no-files-found: error 
+        if-no-files-found: error
 
     - name: Upload Run receipt
       uses: actions/upload-artifact@v4
       with:
         name: current-run-receipt-${{ matrix.stacks.name }}
         path: "*current-run-receipt-${{ matrix.stacks.name }}"
-        if-no-files-found: error 
+        if-no-files-found: error
 
   diff:
     name: Diff Packages
@@ -823,7 +823,7 @@ jobs:
       with:
         name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-        if-no-files-found: error 
+        if-no-files-found: error
 
     - name: Download USN File(s)
       if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
@@ -886,7 +886,7 @@ jobs:
         fi
 
         if [ "${{ matrix.stacks.create_build_image }}" != "true" ]; then
-          build_image="" 
+          build_image=""
         fi
 
         echo "build_image=${build_image}" >> "$GITHUB_OUTPUT"
@@ -929,7 +929,7 @@ jobs:
     - name: Download diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
       uses: actions/download-artifact@v4
       with:
-       name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
+        name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
 
     - name: Compare With Previous Release
       id: compare
@@ -955,7 +955,7 @@ jobs:
 
         if [ "${build_added:-0}" -eq 0 ] && [ "${build_modified:-0}" -eq 0 ] && [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
           echo "No packages changed."
-          # We ommit setting "packages_changed" variable to false, 
+          # We ommit setting "packages_changed" variable to false,
           # as there is an edge case scenario overriding any true value due to parallelization
         else
           echo "Packages changed."
@@ -1230,7 +1230,7 @@ jobs:
                   '. += [
                     {
                       "path": ($hash_code_filepath + "/" + "hash-code-current-build-image-"+ $arch + "-" + $stack_name ),
-                      "name": ($asset_prefix + "-" + $arch_prefix + $build_image + ".oci.sha256"),
+                      "name": ($asset_prefix + $arch_prefix + $build_image + ".oci.sha256"),
                       "content_type": "text/plain"
                     }
                   ]' <<<"${assets}")"

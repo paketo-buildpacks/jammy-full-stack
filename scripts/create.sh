@@ -6,7 +6,7 @@ set -o pipefail
 readonly PROG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="$(cd "${PROG_DIR}/.." && pwd)"
 readonly BIN_DIR="${ROOT_DIR}/.bin"
-readonly IMAGES_JSON="${ROOT_DIR}/stacks/images.json"
+readonly IMAGES_JSON="${ROOT_DIR}/images.json"
 
 # shellcheck source=SCRIPTDIR/.util/tools.sh
 source "${PROG_DIR}/.util/tools.sh"
@@ -67,7 +67,9 @@ function main() {
   if [ -f "${IMAGES_JSON}" ]; then
     # we need to copy images.json for inclusion in the build image
     defaultStackPath=$(jq -r '.images[] | select(.name == "default") | .config_dir' "${IMAGES_JSON}")
-    cp $IMAGES_JSON $ROOT_DIR/$defaultStackPath/images.json
+    if [ -n "$defaultStackPath" ]; then
+      cp $IMAGES_JSON "${ROOT_DIR}/${defaultStackPath}/images.json"
+    fi
   fi
 
   # if stack or build argument is provided but not both, then throw an error
