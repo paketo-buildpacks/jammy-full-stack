@@ -920,6 +920,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: ${{ !cancelled() && !failure() && needs.diff.result != 'skipped' }}
     strategy:
+      fail-fast: false
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
         arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
