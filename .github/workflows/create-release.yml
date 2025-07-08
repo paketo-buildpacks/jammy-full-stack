@@ -88,7 +88,11 @@ jobs:
           for c_stack in $current_stacks; do
             c_stack_name=$(echo "$c_stack" | jq -r '.name')
             stack_exists=$(jq --arg c_stack_name "$c_stack_name" '.images[] | select(.name == $c_stack_name)' ./previous_images.json)
-            c_stack=$(jq --argjson c_stack "$c_stack" '. + {is_new: false}' <<< "$c_stack")
+            is_new=false
+            if [[ -z $stack_exists ]]; then
+              is_new=true
+            fi
+            c_stack=$(jq --argjson c_stack "$c_stack" --argjson is_new "$is_new" '. + {is_new: $is_new}' <<< "$c_stack")
             stacks=$(jq --argjson c_stack "$c_stack" '. + [$c_stack]' <<< "$stacks")
           done
 
@@ -650,6 +654,7 @@ jobs:
     needs: [ create_stack, preparation ]
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
         arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
