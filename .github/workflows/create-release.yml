@@ -27,7 +27,7 @@ env:
 jobs:
   preparation:
     name: Preparation
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       architectures: ${{ steps.lookup.outputs.platforms }}
       archs_added: ${{ steps.lookup.outputs.platforms_added }}
@@ -210,7 +210,7 @@ jobs:
   # a new release with the latest images that have the USNs patched.
   poll_usns:
     name: Poll USNs
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [preparation]
     if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
     strategy:
@@ -404,7 +404,7 @@ jobs:
   # to create a new release with the latest images
   poll_images:
     name: Poll Images based on the hash code
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{ needs.preparation.outputs.polling_type == 'hash' }}
     needs: preparation
     strategy:
@@ -510,7 +510,7 @@ jobs:
   # and the event is schedule, then there is no need to run below workflow as nothing has changed
   stack_files_changed:
     name: Determine If Stack Files Changed
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [ preparation, poll_usns, poll_images ]
     if: ${{
       !failure() && !cancelled() &&
@@ -544,7 +544,7 @@ jobs:
 
   usns_or_sha_changed:
     name: USNs or SHAs have changed
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       changed: ${{ steps.usns_or_sha_changed.outputs.changed }}
     needs: [ preparation, poll_usns, poll_images ]
@@ -583,7 +583,7 @@ jobs:
     # If there is no change on the usns, and there is no change on the image hash codes
     # and the event is schedule, then there is no need to run below workflow as nothing has changed
     if: ${{ !failure() && !cancelled() && !( needs.usns_or_sha_changed.outputs.changed == 'false' && github.event_name == 'schedule') }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
@@ -652,7 +652,7 @@ jobs:
     outputs:
       removed_with_force: ${{ steps.removed_with_force.outputs.packages_removed }}
     needs: [ create_stack, preparation ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -922,7 +922,7 @@ jobs:
   packages_changed:
     name: Determine If Packages Changed
     needs: [ diff, preparation ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{ !cancelled() && !failure() && needs.diff.result != 'skipped' }}
     strategy:
       fail-fast: false
@@ -972,7 +972,7 @@ jobs:
     name: Acceptance Test
     needs: [ preparation, create_stack ]
     if: ${{ !cancelled() && !failure() && needs.create_stack.result != 'skipped' }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - name: Setup Go
       uses: actions/setup-go@v5
@@ -1010,7 +1010,7 @@ jobs:
 
   release:
     name: Release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [create_stack, diff, stack_files_changed, test, preparation, packages_changed]
     if: ${{ always() && needs.diff.result == 'success' && needs.test.result == 'success' && ( needs.packages_changed.outputs.packages_changed == 'true' ||  needs.stack_files_changed.outputs.stack_files_changed == 'true' || github.event.inputs.force == 'true' ) }}
     outputs:
@@ -1453,7 +1453,7 @@ jobs:
 
   failure:
     name: Alert on Failure
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [ preparation, poll_usns, poll_images, create_stack, diff, test, release ]
     if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' }}
     steps:
