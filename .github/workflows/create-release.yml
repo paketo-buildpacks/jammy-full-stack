@@ -44,7 +44,7 @@ jobs:
       support_usns: ${{ steps.polling-os-type.outputs.support_usns }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # gets full history
 
@@ -523,7 +523,7 @@ jobs:
       stack_files_changed: ${{ steps.compare.outputs.stack_files_changed }}
     steps:
     - name: Checkout With History
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0  # gets full history
 
@@ -589,7 +589,7 @@ jobs:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     # https://github.com/docker/setup-qemu-action
     - name: Set up QEMU
@@ -660,7 +660,7 @@ jobs:
         arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
     steps:
     - name: Checkout With History
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0  # gets full history
 
@@ -975,10 +975,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
 
@@ -1026,7 +1026,7 @@ jobs:
         printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
     - name: Checkout With History
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0  # gets full history
 
