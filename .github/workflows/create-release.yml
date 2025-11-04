@@ -2,7 +2,7 @@ name: Create Release
 
 on:
   schedule:
-    - cron: '27 2,14 * * *'  # daily at 02:27 and 14:27 UTC
+    - cron: '36 0,12 * * *'  # daily at 00:36 and 12:36 UTC
   push:
     branches:
     - main
@@ -898,7 +898,7 @@ jobs:
         echo "run_image=${run_image}" >> "$GITHUB_OUTPUT"
 
     - name: Create Release Notes per Arch and per Stack
-      id: notes_arc_stack
+      id: notes_arch_stack
       uses: paketo-buildpacks/github-config/actions/stack/release-notes@main
       with:
         build_image: ${{ steps.registry_names.outputs.build_image }}
@@ -910,7 +910,7 @@ jobs:
         run_packages_modified: "/github/workspace/${{ env.RUN_DIFF_MODIFIED_FILENAME }}"
         run_packages_removed_with_force: "/github/workspace/${{ env.RUN_DIFF_REMOVED_FILENAME }}"
         supports_usns: ${{ needs.preparation.outputs.support_usns }}
-        patched_usns: ${{ needs.get-usns.outputs.usns }}
+        patched_usns: ${{ steps.get-usns.outputs.usns }}
         release_body_file: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
 
     - name: Upload ${{ matrix.arch.name }} release notes file for stack ${{ matrix.stacks.name }}
