@@ -4,31 +4,123 @@ on:
   pull_request:
     branches:
     - main
+env:
+  STACKS_FILEPATH: "images.json"
 
 jobs:
-  test:
-    name: Acceptance Test
+  preparation:
+    name: Preparation
     runs-on: ubuntu-24.04
+    outputs:
+      stacks: ${{ steps.get-stacks.outputs.stacks }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gets full history
+
+      - name: Get stacks images
+        id: get-stacks
+        run: |
+
+          if [ -f ${{ env.STACKS_FILEPATH }} ]; then
+            stacks=$(jq -c '.images' images.json)
+          else
+            stacks=$(jq -n -c '[
+                {
+                  "name": "default",
+                  "config_dir": "stack",
+                  "output_dir": "build",
+                  "create_build_image": true,
+                }
+            ]')
+          fi
+
+          stacks=$(echo "$stacks" | jq 'map({
+              name,
+              config_dir,
+              output_dir,
+              create_build_image})')
+
+          stacks=$(jq -c <<< "$stacks" )
+          echo "stacks=$stacks"
+          echo "stacks=$stacks" >> "$GITHUB_OUTPUT"
+
+  create_stack:
+    name: Create Stack
+    needs: [ preparation ]
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v5
-
-    - name: Setup Go
-      uses: actions/setup-go@v6
-      with:
-        go-version-file: go.mod
+      uses: actions/checkout@v4
 
     # https://github.com/docker/setup-qemu-action
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
 
-    - name: Create stack
+    - name: Create stack ${{ matrix.stacks.name }}
       id: create-stack
       run: |
-        ./scripts/create.sh
+        scripts/create.sh --stack-dir ${{ matrix.stacks.config_dir }} \
+                          --build-dir ${{ matrix.stacks.output_dir }}
+
+    - name: Upload run image
+      uses: actions/upload-artifact@v4
+      with:
+        name: current-run-image-${{ matrix.stacks.name }}
+        path: "${{ matrix.stacks.output_dir }}/run.oci"
+        if-no-files-found: error
+
+    - name: Upload build image
+      if: ${{ matrix.stacks.create_build_image == true }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: current-build-image-${{ matrix.stacks.name }}
+        path: "${{ matrix.stacks.output_dir }}/build.oci"
+        if-no-files-found: error
+
+  test:
+    name: Acceptance Test
+    needs: [ preparation, create_stack ]
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: stable
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Download Build Image(s)
+      uses: actions/download-artifact@v4
+      with:
+        pattern: current-build-image-*
+
+    - name: Download Run Image(s)
+      uses: actions/download-artifact@v4
+      with:
+        pattern: current-run-image-*
+
+    - name: Create OCI artifacts destination directory
+      run: |
+        echo '${{ needs.preparation.outputs.stacks }}' | jq -c '.[]' | while read -r stack; do
+          name=$(echo "$stack" | jq -r '.name')
+          output_dir=$(echo "$stack" | jq -r '.output_dir')
+          create_build_image=$(echo "$stack" | jq -r '.create_build_image')
+          mkdir -p $output_dir
+          mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
+          if [ $create_build_image == 'true' ]; then
+            mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
+          fi
+        done
 
     - name: Run Acceptance Tests
-      run: ./scripts/test.sh
+      run: ./scripts/test.sh --validate-stack-builds
 
   upload:
     name: Upload Workflow Event Payload
