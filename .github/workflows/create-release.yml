@@ -44,7 +44,7 @@ jobs:
       support_usns: ${{ steps.polling-os-type.outputs.support_usns }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # gets full history
 
@@ -384,7 +384,7 @@ jobs:
         usns_output_path: "./${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
 
     - name: Upload USNs file
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
         path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
@@ -478,7 +478,7 @@ jobs:
         fi
 
     - name: Upload run image hash code
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
@@ -486,7 +486,7 @@ jobs:
 
     - name: Upload build image hash code
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
@@ -523,7 +523,7 @@ jobs:
       stack_files_changed: ${{ steps.compare.outputs.stack_files_changed }}
     steps:
     - name: Checkout With History
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0  # gets full history
 
@@ -589,7 +589,7 @@ jobs:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     # https://github.com/docker/setup-qemu-action
     - name: Set up QEMU
@@ -610,7 +610,7 @@ jobs:
                             --run-receipt current-run-receipt-${{ matrix.stacks.name }}
 
     - name: Upload run image
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: current-run-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/run.oci"
@@ -618,7 +618,7 @@ jobs:
 
     - name: Upload build image
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: current-build-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/build.oci"
@@ -626,14 +626,14 @@ jobs:
 
     - name: Upload Build receipt
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: current-build-receipt-${{ matrix.stacks.name }}
         path: "*current-build-receipt-${{ matrix.stacks.name }}"
         if-no-files-found: error
 
     - name: Upload Run receipt
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: current-run-receipt-${{ matrix.stacks.name }}
         path: "*current-run-receipt-${{ matrix.stacks.name }}"
@@ -660,12 +660,12 @@ jobs:
         arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
     steps:
     - name: Checkout With History
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0  # gets full history
 
     - name: Download Current Receipt(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         pattern: current-*-receipt-${{ matrix.stacks.name }}
         path: receipt-files
@@ -824,7 +824,7 @@ jobs:
         cp "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}" "$diffs_dir/run_removed_with_force"
 
     - name: Upload diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
@@ -832,7 +832,7 @@ jobs:
 
     - name: Download USN File(s)
       if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         path: "patched-usns"
         pattern: ${{ matrix.arch.name }}-*${{ env.PATCHED_USNS_FILENAME }}
@@ -914,7 +914,7 @@ jobs:
         release_body_file: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
 
     - name: Upload ${{ matrix.arch.name }} release notes file for stack ${{ matrix.stacks.name }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
         path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
@@ -933,7 +933,7 @@ jobs:
       packages_changed: ${{ steps.compare.outputs.packages_changed }}
     steps:
     - name: Download diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
 
@@ -975,7 +975,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: Setup Go
       uses: actions/setup-go@v6
@@ -983,12 +983,12 @@ jobs:
         go-version-file: go.mod
 
     - name: Download Build Image(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         pattern: current-build-image-*
 
     - name: Download Run Image(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         pattern: current-run-image-*
 
@@ -1026,18 +1026,18 @@ jobs:
         printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
     - name: Checkout With History
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0  # gets full history
 
     - name: Download current build image(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         path: image-files
         pattern: current-build-image-*
 
     - name: Download current run image(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         path: image-files
         pattern: current-run-image-*
@@ -1046,14 +1046,14 @@ jobs:
       run: ls image-files
 
     - name: Download Build Receipt(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         path: receipt-files
         pattern: current-build-receipt-*
         merge-multiple: true
 
     - name: Download Run Receipt(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         path: receipt-files
         pattern: current-run-receipt-*
@@ -1063,7 +1063,7 @@ jobs:
       run: ls receipt-files
 
     - name: Download Release Note File(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         path: release-notes
         pattern: "*release-notes.md"
@@ -1074,7 +1074,7 @@ jobs:
 
     - name: Download hash code Files
       if: ${{ needs.preparation.outputs.polling_type == 'hash' }}
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         path: hash-code-files
         pattern: hash-code-*
@@ -1086,7 +1086,7 @@ jobs:
 
     - name: Download USN Files
       if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         path: usn-files
         pattern: "*${{ env.PATCHED_USNS_FILENAME }}"

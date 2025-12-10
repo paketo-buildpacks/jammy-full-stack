@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # gets full history
 
@@ -56,7 +56,7 @@ jobs:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     # https://github.com/docker/setup-qemu-action
     - name: Set up QEMU
@@ -69,7 +69,7 @@ jobs:
                           --build-dir ${{ matrix.stacks.output_dir }}
 
     - name: Upload run image
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: current-run-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/run.oci"
@@ -77,7 +77,7 @@ jobs:
 
     - name: Upload build image
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: current-build-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/build.oci"
@@ -89,20 +89,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: stable
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Download Build Image(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         pattern: current-build-image-*
 
     - name: Download Run Image(s)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         pattern: current-run-image-*
 
@@ -127,7 +127,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: event-payload
         path: ${{ github.event_path }}
