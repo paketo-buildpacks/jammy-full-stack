@@ -384,7 +384,7 @@ jobs:
         usns_output_path: "./${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
 
     - name: Upload USNs file
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
         path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
@@ -478,7 +478,7 @@ jobs:
         fi
 
     - name: Upload run image hash code
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
@@ -486,7 +486,7 @@ jobs:
 
     - name: Upload build image hash code
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
@@ -610,7 +610,7 @@ jobs:
                             --run-receipt current-run-receipt-${{ matrix.stacks.name }}
 
     - name: Upload run image
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: current-run-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/run.oci"
@@ -618,7 +618,7 @@ jobs:
 
     - name: Upload build image
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: current-build-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/build.oci"
@@ -626,14 +626,14 @@ jobs:
 
     - name: Upload Build receipt
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: current-build-receipt-${{ matrix.stacks.name }}
         path: "*current-build-receipt-${{ matrix.stacks.name }}"
         if-no-files-found: error
 
     - name: Upload Run receipt
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: current-run-receipt-${{ matrix.stacks.name }}
         path: "*current-run-receipt-${{ matrix.stacks.name }}"
@@ -824,7 +824,7 @@ jobs:
         cp "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}" "$diffs_dir/run_removed_with_force"
 
     - name: Upload diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
@@ -914,7 +914,7 @@ jobs:
         release_body_file: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
 
     - name: Upload ${{ matrix.arch.name }} release notes file for stack ${{ matrix.stacks.name }}
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
         path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
