@@ -97,12 +97,12 @@ jobs:
       uses: actions/checkout@v6
 
     - name: Download Build Image(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         pattern: current-build-image-*
 
     - name: Download Run Image(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         pattern: current-run-image-*
 
