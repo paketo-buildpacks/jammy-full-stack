@@ -126,7 +126,7 @@ jobs:
             support_usns=$( jq '.support_usns' ${{ env.STACKS_FILEPATH }} )
           fi
 
-          if [ $support_usns == "true" ]; then
+          if [ $support_usns == true ]; then
             echo "polling_type=usn" >> "$GITHUB_OUTPUT"
           else
             echo "polling_type=hash" >> "$GITHUB_OUTPUT"
@@ -224,7 +224,8 @@ jobs:
       id: check_previous
       run: |
         gh auth status
-        if [ "$(gh api "/repos/${{ github.repository }}/releases" | jq -r 'length')" -eq 0 ]; then
+        # shellcheck disable=SC2046
+        if [ $(gh api "/repos/${{ github.repository }}/releases" | jq -r 'length') -eq 0 ]; then
           echo "exists=false"
           echo "exists=false" >> "$GITHUB_OUTPUT"
         else
@@ -389,7 +390,7 @@ jobs:
         usns_output_path: "./${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
 
     - name: Upload USNs file
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
         path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
@@ -397,7 +398,7 @@ jobs:
     - name: Are any new USNs
       id: new_usns
       run: |
-        are_new_usns=$(jq 'length > 0' "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}")
+        are_new_usns=$(cat "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}" | jq 'length > 0')
 
         if [ $are_new_usns == true ]; then
           echo "usns=true"
@@ -434,11 +435,17 @@ jobs:
           if [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
             build="${os_codename}-${stack_type}-${repo_type}-\\d+.\\d+(.\\d+)?-${build_image}.oci.sha256"
             run="${os_codename}-${stack_type}-${repo_type}-\\d+.\\d+(.\\d+)?-${run_image}.oci.sha256"
+          elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
+            build="${os_name}-${os_codename}-${build_image}-${stack_type}-\\d+\\.\\d+(\\.\\d+)?.oci.sha256"
+            run="${os_name}-${os_codename}-${run_image}-${stack_type}-\\d+\\.\\d+(\\.\\d+)?.oci.sha256"
           fi
         else
           if [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
             build="${os_codename}-${stack_type}-${repo_type}-\\d+.\\d+(.\\d+)?-${arch}-${build_image}.oci.sha256"
             run="${os_codename}-${stack_type}-${repo_type}-\\d+.\\d+(.\\d+)?-${arch}-${run_image}.oci.sha256"
+          elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
+            build="${os_name}-${os_codename}-${build_image}-${stack_type}-\\d+\\.\\d+(\\.\\d+)?-${arch}.oci.sha256"
+            run="${os_name}-${os_codename}-${run_image}-${stack_type}-\\d+\\.\\d+(\\.\\d+)?-${arch}.oci.sha256"
           fi
         fi
 
@@ -483,7 +490,7 @@ jobs:
         fi
 
     - name: Upload run image hash code
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: hash-code-current-run-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
@@ -491,7 +498,7 @@ jobs:
 
     - name: Upload build image hash code
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: hash-code-current-build-image-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
@@ -615,7 +622,7 @@ jobs:
                             --run-receipt current-run-receipt-${{ matrix.stacks.name }}
 
     - name: Upload run image
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: current-run-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/run.oci"
@@ -623,7 +630,7 @@ jobs:
 
     - name: Upload build image
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: current-build-image-${{ matrix.stacks.name }}
         path: "${{ matrix.stacks.output_dir }}/build.oci"
@@ -631,14 +638,14 @@ jobs:
 
     - name: Upload Build receipt
       if: ${{ matrix.stacks.create_build_image == true }}
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: current-build-receipt-${{ matrix.stacks.name }}
         path: "*current-build-receipt-${{ matrix.stacks.name }}"
         if-no-files-found: error
 
     - name: Upload Run receipt
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: current-run-receipt-${{ matrix.stacks.name }}
         path: "*current-run-receipt-${{ matrix.stacks.name }}"
@@ -670,7 +677,7 @@ jobs:
         fetch-depth: 0  # gets full history
 
     - name: Download Current Receipt(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         pattern: current-*-receipt-${{ matrix.stacks.name }}
         path: receipt-files
@@ -829,7 +836,7 @@ jobs:
         cp "${{ github.workspace }}/${{ env.RUN_DIFF_REMOVED_FILENAME }}" "$diffs_dir/run_removed_with_force"
 
     - name: Upload diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
         path: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
@@ -837,7 +844,7 @@ jobs:
 
     - name: Download USN File(s)
       if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         path: "patched-usns"
         pattern: ${{ matrix.arch.name }}-*${{ env.PATCHED_USNS_FILENAME }}
@@ -919,7 +926,7 @@ jobs:
         release_body_file: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
 
     - name: Upload ${{ matrix.arch.name }} release notes file for stack ${{ matrix.stacks.name }}
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
         path: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-release-notes.md"
@@ -938,7 +945,7 @@ jobs:
       packages_changed: ${{ steps.compare.outputs.packages_changed }}
     steps:
     - name: Download diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         name: diff-${{ matrix.arch.name }}-${{ matrix.stacks.name }}
 
@@ -988,12 +995,12 @@ jobs:
         go-version-file: go.mod
 
     - name: Download Build Image(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         pattern: current-build-image-*
 
     - name: Download Run Image(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         pattern: current-run-image-*
 
@@ -1036,13 +1043,13 @@ jobs:
         fetch-depth: 0  # gets full history
 
     - name: Download current build image(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         path: image-files
         pattern: current-build-image-*
 
     - name: Download current run image(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         path: image-files
         pattern: current-run-image-*
@@ -1051,14 +1058,14 @@ jobs:
       run: ls image-files
 
     - name: Download Build Receipt(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         path: receipt-files
         pattern: current-build-receipt-*
         merge-multiple: true
 
     - name: Download Run Receipt(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         path: receipt-files
         pattern: current-run-receipt-*
@@ -1068,7 +1075,7 @@ jobs:
       run: ls receipt-files
 
     - name: Download Release Note File(s)
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         path: release-notes
         pattern: "*release-notes.md"
@@ -1079,7 +1086,7 @@ jobs:
 
     - name: Download hash code Files
       if: ${{ needs.preparation.outputs.polling_type == 'hash' }}
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         path: hash-code-files
         pattern: hash-code-*
@@ -1091,7 +1098,7 @@ jobs:
 
     - name: Download USN Files
       if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v4
       with:
         path: usn-files
         pattern: "*${{ env.PATCHED_USNS_FILENAME }}"
@@ -1192,56 +1199,54 @@ jobs:
             create_build_image=$(echo "$stack" | jq -r '.create_build_image // false')
             stack_type=$(echo "$stack" | jq -r '.stack_type // ""')
             pattern_assets_prefix=$(echo "$stack" | jq -r '.pattern_assets_prefix // ""')
+            version="${{ steps.tag.outputs.tag }}"
 
             for arch in $archs; do
               arch_name=$(echo "$arch" | jq -r '.name')
-              arch_prefix="-${arch_name}-"
+              arch_prefix="${arch_name}"
               if [[ $arch_name == "amd64" ]]; then
-                arch_prefix="-"
+                arch_prefix=""
               fi
 
               # hash code for the run image
               run_image=$(echo "$stack" | jq -r '.run_image')
+              build_image=$(echo "$stack" | jq -r '.build_image')
               if [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
-                asset_prefix="${os_codename}-${stack_type}-${repo_type}-${version}"
+                asset_prefix_run_image=$( echo '[ "'"$os_codename"'", "'"$stack_type"'", "'"$repo_type"'", "'"$version"'",
+                "'"$arch_prefix"'", "'"$run_image"'"]' | jq -r 'map(select(length > 0)) | join("-")' )
+                asset_prefix_build_image=$( echo '[ "'"$os_codename"'", "'"$stack_type"'", "'"$repo_type"'", "'"$version"'",
+                "'"$arch_prefix"'", "'"$build_image"'"]' | jq -r 'map(select(length > 0)) | join("-")' )
+              elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
+                asset_prefix_run_image=$( echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$run_image"'", "'"$stack_type"'",
+                "'"$version"'", "'"$arch_prefix"'"]' | jq -r 'map(select(length > 0)) | join("-")' )
+                asset_prefix_build_image=$( echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$build_image"'", "'"$stack_type"'",
+                "'"$version"'", "'"$arch_prefix"'"]' | jq -r 'map(select(length > 0)) | join("-")' )
               fi
 
-              run_image=$(echo "$stack" | jq -r '.run_image')
               assets="$(jq -c \
                 --arg hash_code_filepath "hash-code-files" \
                 --arg stack_name "${stack_name}" \
-                --arg run_image "${run_image}" \
-                --arg asset_prefix "$asset_prefix" \
+                --arg asset_prefix "${asset_prefix_run_image}" \
                 --arg arch "${arch_name}" \
-                --arg arch_prefix "${arch_prefix}" \
                 '. += [
                   {
                     "path": ($hash_code_filepath + "/" + "hash-code-current-run-image-"+ $arch + "-" + $stack_name ),
-                    "name": ($asset_prefix + $arch_prefix + $run_image + ".oci.sha256"),
+                    "name": ($asset_prefix + ".oci.sha256"),
                     "content_type": "text/plain"
                   }
                 ]' <<<"${assets}")"
 
               # hash code for the build image
-              if [[ $create_build_image == true ]]; then
-
-                build_image=$(echo "$stack" | jq -r '.build_image')
-                if [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
-                  asset_prefix="${os_codename}-${stack_type}-${repo_type}-${version}"
-                fi
-
-                build_image=$(echo "$stack" | jq -r '.build_image')
+              if [[ "$create_build_image" == "true" ]]; then
                 assets="$(jq -c \
                   --arg hash_code_filepath "hash-code-files" \
                   --arg stack_name "${stack_name}" \
-                  --arg build_image "${build_image}" \
-                  --arg asset_prefix "$asset_prefix" \
+                  --arg asset_prefix "${asset_prefix_build_image}" \
                   --arg arch "${arch_name}" \
-                  --arg arch_prefix "${arch_prefix}" \
                   '. += [
                     {
                       "path": ($hash_code_filepath + "/" + "hash-code-current-build-image-"+ $arch + "-" + $stack_name ),
-                      "name": ($asset_prefix + $arch_prefix + $build_image + ".oci.sha256"),
+                      "name": ($asset_prefix + ".oci.sha256"),
                       "content_type": "text/plain"
                     }
                   ]' <<<"${assets}")"
@@ -1266,6 +1271,7 @@ jobs:
 
             # SBOM for the run image
             run_image=$(echo "$stack" | jq -r '.run_image')
+            build_image=$(echo "$stack" | jq -r '.build_image')
             if [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
               sbom_asset_name_run_image=$( echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$run_image"'", "'"$stack_type"'",
               "'"$version"'", "'"$arch_prefix"'", "receipt.cyclonedx.json" ]' | jq -r 'map(select(length > 0)) | join("-")' )
