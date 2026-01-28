@@ -44,7 +44,7 @@ jobs:
       support_usns: ${{ steps.polling-os-type.outputs.support_usns }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # gets full history
 
@@ -322,6 +322,12 @@ jobs:
         run_receipt: "${{ github.workspace }}/${{ matrix.arch.name }}-previous-run-receipt-${{ matrix.stacks.name }}"
         output_path: "${{ github.workspace }}/${{ matrix.arch.name }}-package-list-${{ matrix.stacks.name }}"
 
+    - name: Upload package list file
+      uses: actions/upload-artifact@v4
+      with:
+        name: "${{ matrix.arch.name }}-${{ matrix.stacks.name }}-package-list.json"
+        path: "${{ github.workspace }}/${{ matrix.arch.name }}-package-list-${{ matrix.stacks.name }}"
+
     - name: Generate USNs download asset pattern
       id: usn_download_pattern
       run: |
@@ -429,11 +435,17 @@ jobs:
           if [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
             build="${os_codename}-${stack_type}-${repo_type}-\\d+.\\d+(.\\d+)?-${build_image}.oci.sha256"
             run="${os_codename}-${stack_type}-${repo_type}-\\d+.\\d+(.\\d+)?-${run_image}.oci.sha256"
+          elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
+            build="${os_name}-${os_codename}-${build_image}-${stack_type}-\\d+\\.\\d+(\\.\\d+)?.oci.sha256"
+            run="${os_name}-${os_codename}-${run_image}-${stack_type}-\\d+\\.\\d+(\\.\\d+)?.oci.sha256"
           fi
         else
           if [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
             build="${os_codename}-${stack_type}-${repo_type}-\\d+.\\d+(.\\d+)?-${arch}-${build_image}.oci.sha256"
             run="${os_codename}-${stack_type}-${repo_type}-\\d+.\\d+(.\\d+)?-${arch}-${run_image}.oci.sha256"
+          elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
+            build="${os_name}-${os_codename}-${build_image}-${stack_type}-\\d+\\.\\d+(\\.\\d+)?-${arch}.oci.sha256"
+            run="${os_name}-${os_codename}-${run_image}-${stack_type}-\\d+\\.\\d+(\\.\\d+)?-${arch}.oci.sha256"
           fi
         fi
 
@@ -523,7 +535,7 @@ jobs:
       stack_files_changed: ${{ steps.compare.outputs.stack_files_changed }}
     steps:
     - name: Checkout With History
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0  # gets full history
 
@@ -589,7 +601,7 @@ jobs:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     # https://github.com/docker/setup-qemu-action
     - name: Set up QEMU
@@ -660,7 +672,7 @@ jobs:
         arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
     steps:
     - name: Checkout With History
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0  # gets full history
 
@@ -975,7 +987,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: Setup Go
       uses: actions/setup-go@v6
@@ -1026,7 +1038,7 @@ jobs:
         printf "Force Release: %s\n" "${{ github.event.inputs.force }}"
 
     - name: Checkout With History
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0  # gets full history
 
@@ -1187,56 +1199,54 @@ jobs:
             create_build_image=$(echo "$stack" | jq -r '.create_build_image // false')
             stack_type=$(echo "$stack" | jq -r '.stack_type // ""')
             pattern_assets_prefix=$(echo "$stack" | jq -r '.pattern_assets_prefix // ""')
+            version="${{ steps.tag.outputs.tag }}"
 
             for arch in $archs; do
               arch_name=$(echo "$arch" | jq -r '.name')
-              arch_prefix="-${arch_name}-"
+              arch_prefix="${arch_name}"
               if [[ $arch_name == "amd64" ]]; then
-                arch_prefix="-"
+                arch_prefix=""
               fi
 
               # hash code for the run image
               run_image=$(echo "$stack" | jq -r '.run_image')
+              build_image=$(echo "$stack" | jq -r '.build_image')
               if [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
-                asset_prefix="${os_codename}-${stack_type}-${repo_type}-${version}"
+                asset_prefix_run_image=$( echo '[ "'"$os_codename"'", "'"$stack_type"'", "'"$repo_type"'", "'"$version"'",
+                "'"$arch_prefix"'", "'"$run_image"'"]' | jq -r 'map(select(length > 0)) | join("-")' )
+                asset_prefix_build_image=$( echo '[ "'"$os_codename"'", "'"$stack_type"'", "'"$repo_type"'", "'"$version"'",
+                "'"$arch_prefix"'", "'"$build_image"'"]' | jq -r 'map(select(length > 0)) | join("-")' )
+              elif [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
+                asset_prefix_run_image=$( echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$run_image"'", "'"$stack_type"'",
+                "'"$version"'", "'"$arch_prefix"'"]' | jq -r 'map(select(length > 0)) | join("-")' )
+                asset_prefix_build_image=$( echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$build_image"'", "'"$stack_type"'",
+                "'"$version"'", "'"$arch_prefix"'"]' | jq -r 'map(select(length > 0)) | join("-")' )
               fi
 
-              run_image=$(echo "$stack" | jq -r '.run_image')
               assets="$(jq -c \
                 --arg hash_code_filepath "hash-code-files" \
                 --arg stack_name "${stack_name}" \
-                --arg run_image "${run_image}" \
-                --arg asset_prefix "$asset_prefix" \
+                --arg asset_prefix "${asset_prefix_run_image}" \
                 --arg arch "${arch_name}" \
-                --arg arch_prefix "${arch_prefix}" \
                 '. += [
                   {
                     "path": ($hash_code_filepath + "/" + "hash-code-current-run-image-"+ $arch + "-" + $stack_name ),
-                    "name": ($asset_prefix + $arch_prefix + $run_image + ".oci.sha256"),
+                    "name": ($asset_prefix + ".oci.sha256"),
                     "content_type": "text/plain"
                   }
                 ]' <<<"${assets}")"
 
               # hash code for the build image
-              if [[ $create_build_image == true ]]; then
-
-                build_image=$(echo "$stack" | jq -r '.build_image')
-                if [[ "$pattern_assets_prefix" == "os_codename-stack_type-repo_type-version-arch-build_image_run_image" ]]; then
-                  asset_prefix="${os_codename}-${stack_type}-${repo_type}-${version}"
-                fi
-
-                build_image=$(echo "$stack" | jq -r '.build_image')
+              if [[ "$create_build_image" == "true" ]]; then
                 assets="$(jq -c \
                   --arg hash_code_filepath "hash-code-files" \
                   --arg stack_name "${stack_name}" \
-                  --arg build_image "${build_image}" \
-                  --arg asset_prefix "$asset_prefix" \
+                  --arg asset_prefix "${asset_prefix_build_image}" \
                   --arg arch "${arch_name}" \
-                  --arg arch_prefix "${arch_prefix}" \
                   '. += [
                     {
                       "path": ($hash_code_filepath + "/" + "hash-code-current-build-image-"+ $arch + "-" + $stack_name ),
-                      "name": ($asset_prefix + $arch_prefix + $build_image + ".oci.sha256"),
+                      "name": ($asset_prefix + ".oci.sha256"),
                       "content_type": "text/plain"
                     }
                   ]' <<<"${assets}")"
@@ -1261,6 +1271,7 @@ jobs:
 
             # SBOM for the run image
             run_image=$(echo "$stack" | jq -r '.run_image')
+            build_image=$(echo "$stack" | jq -r '.build_image')
             if [[ "$pattern_assets_prefix" == "os_name-os_codename-build_image_run_image-stack_type-version-arch" ]]; then
               sbom_asset_name_run_image=$( echo '[ "'"$os_name"'", "'"$os_codename"'", "'"$run_image"'", "'"$stack_type"'",
               "'"$version"'", "'"$arch_prefix"'", "receipt.cyclonedx.json" ]' | jq -r 'map(select(length > 0)) | join("-")' )
