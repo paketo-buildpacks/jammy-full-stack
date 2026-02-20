@@ -2,7 +2,6 @@ package acceptance_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -104,17 +103,12 @@ func testBuildpackIntegration(t *testing.T, context spec.G, it spec.S) {
 		Expect(docker.Image.Remove.Execute(image.ID)).To(Succeed())
 		Expect(docker.Volume.Remove.Execute(occam.CacheVolumeNames(name))).To(Succeed())
 
-		lifecycleVersion, err := getLifecycleVersion(builder)
-		Expect(err).NotTo(HaveOccurred())
-
 		Expect(docker.Image.Remove.Execute(builder)).To(Succeed())
 		Expect(os.RemoveAll(builderConfigFilepath)).To(Succeed())
 
 		Expect(docker.Image.Remove.Execute(stack.BuildImageID)).To(Succeed())
 		Expect(docker.Image.Remove.Execute(stack.RunImageID)).To(Succeed())
 		Expect(docker.Image.Remove.Execute(REGISTRY_IMAGE)).To(Succeed())
-
-		Expect(docker.Image.Remove.Execute(fmt.Sprintf("buildpacksio/lifecycle:%s", lifecycleVersion))).To(Succeed())
 
 		Expect(os.RemoveAll(source)).To(Succeed())
 	})
@@ -197,39 +191,4 @@ func createBuilder(config string, name string) (string, error) {
 		},
 	})
 	return buf.String(), err
-}
-
-type Builder struct {
-	LocalInfo struct {
-		Lifecycle struct {
-			Version string `json:"version"`
-		} `json:"lifecycle"`
-	} `json:"local_info"`
-}
-
-func getLifecycleVersion(builderID string) (string, error) {
-	buf := bytes.NewBuffer(nil)
-	pack := pexec.NewExecutable("pack")
-	err := pack.Execute(pexec.Execution{
-		Stdout: buf,
-		Stderr: buf,
-		Args: []string{
-			"builder",
-			"inspect",
-			builderID,
-			"-o",
-			"json",
-		},
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	var builder Builder
-	err = json.Unmarshal((buf.Bytes()), &builder)
-	if err != nil {
-		return "", err
-	}
-	return builder.LocalInfo.Lifecycle.Version, nil
 }
