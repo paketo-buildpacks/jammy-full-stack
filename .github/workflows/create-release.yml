@@ -414,6 +414,7 @@ jobs:
     if: ${{ needs.preparation.outputs.polling_type == 'hash' }}
     needs: preparation
     strategy:
+      max-parallel: 4
       matrix:
         stacks: ${{ fromJSON(needs.preparation.outputs.stacks) }}
         arch: ${{ fromJSON(needs.preparation.outputs.architectures) }}
