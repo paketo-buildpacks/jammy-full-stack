@@ -24,6 +24,7 @@ concurrency: release
 env:
   STACKS_FILEPATH: "images.json"
   PATCHED_USNS_FILENAME: "patched-usns.json"
+  USNS_NOTICES_ARTIFACT: "usns-notices"
 jobs:
   preparation:
     name: Preparation
@@ -205,13 +206,31 @@ jobs:
           echo "platforms=$platforms"
           echo "platforms=${platforms}" >> "$GITHUB_OUTPUT"
 
+  download_usns:
+    name: Download USNs
+    runs-on: ubuntu-24.04
+    needs: [preparation]
+    if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
+    steps:
+      - name: Download latest USNs
+        uses: paketo-buildpacks/github-config/actions/stack/download-latest-usns@main
+        with:
+          distro: ${{ needs.preparation.outputs.os_codename }}
+          usns-output-path: "${{ github.workspace }}/${{ env.USNS_NOTICES_ARTIFACT }}.json"
+
+      - name: Upload USNs notices
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.USNS_NOTICES_ARTIFACT }}
+          path: "${{ github.workspace }}/${{ env.USNS_NOTICES_ARTIFACT }}.json"
+
   # The following job is specific to Ubuntu images. It checks for new
   # USNs (Ubuntu Security Notices) and triggers the flow to create
   # a new release with the latest images that have the USNs patched.
   poll_usns:
     name: Poll USNs
     runs-on: ubuntu-24.04
-    needs: [preparation]
+    needs: [preparation, download_usns]
     if: ${{ needs.preparation.outputs.polling_type == 'usn' }}
     strategy:
       matrix:
@@ -220,6 +239,11 @@ jobs:
     outputs:
       usns: ${{ steps.new_usns.outputs.usns }}
     steps:
+    - name: Download USNs notices
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.USNS_NOTICES_ARTIFACT }}
+
     - name: Check for Previous Releases
       id: check_previous
       run: |
@@ -385,6 +409,7 @@ jobs:
       uses: paketo-buildpacks/github-config/actions/stack/get-usns@main
       with:
         distribution: ${{ needs.preparation.outputs.os_codename }}
+        api_url: "file:///github/workspace/${{ env.USNS_NOTICES_ARTIFACT }}.json"
         packages_filepath: "./${{ matrix.arch.name }}-package-list-${{ matrix.stacks.name }}"
         last_usns_filepath: "./${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}-previous"
         usns_output_path: "./${{ matrix.arch.name }}-${{ matrix.stacks.name }}-${{ env.PATCHED_USNS_FILENAME }}"
