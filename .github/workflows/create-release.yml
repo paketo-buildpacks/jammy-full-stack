@@ -450,6 +450,7 @@ jobs:
       id: hashcode_pattern
       run: |
         os_codename="${{ needs.preparation.outputs.os_codename }}"
+        os_name="${{ needs.preparation.outputs.os_name }}"
         stack_type="${{ matrix.stacks.stack_type }}"
         repo_type="${{ needs.preparation.outputs.repo_type }}"
         build_image="${{ matrix.stacks.build_image }}"
@@ -631,7 +632,7 @@ jobs:
 
     # https://github.com/docker/setup-qemu-action
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@v4
 
     - name: Create stack ${{ matrix.stacks.name }}
       id: create-stack
@@ -724,7 +725,7 @@ jobs:
     - name: Write Empty Previous Receipts
       if: ${{ steps.check_previous.outputs.exists == 'false' || matrix.arch.is_new == true || matrix.stacks.is_new == true }}
       run: |
-        if [ ${{ matrix.stacks.create_build_image }} == true ]; then
+        if [ "${{ matrix.stacks.create_build_image }}" == "true" ]; then
           if [ ! -f "./${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}" ]; then
             echo '{"components":[]}' > "./${{ matrix.arch.name }}-previous-build-receipt-${{ matrix.stacks.name }}"
           fi
@@ -999,7 +1000,7 @@ jobs:
 
         if [ "${build_added:-0}" -eq 0 ] && [ "${build_modified:-0}" -eq 0 ] && [ "${run_added}" -eq 0 ] && [ "${run_modified}" -eq 0 ]; then
           echo "No packages changed."
-          # We ommit setting "packages_changed" variable to false,
+          # We omit setting "packages_changed" variable to false,
           # as there is an edge case scenario overriding any true value due to parallelization
         else
           echo "Packages changed."
