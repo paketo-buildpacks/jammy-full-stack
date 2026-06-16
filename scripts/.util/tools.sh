@@ -38,6 +38,14 @@ function util::tools::arch() {
       fi
       ;;
 
+    s390x)
+      echo "s390x"
+      ;;
+
+    ppc64le)
+      echo "ppc64le"
+      ;;
+
     *)
       util::print::error "Unknown Architecture \"$(uname -m)\""
       exit 1
