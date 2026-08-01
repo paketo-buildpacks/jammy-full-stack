@@ -118,9 +118,11 @@ function main() {
     while read -r image; do
       config_dir=$(echo "${image}" | jq -r '.config_dir')
       output_dir=$(echo "${image}" | jq -r '.output_dir')
+      no_stack_id=$(echo "${image}" | jq -r '.no_stack_id // false')
       "${ROOT_DIR}/scripts/create.sh" \
         --stack-dir "${config_dir}" \
-        --build-dir "${output_dir}"
+        --build-dir "${output_dir}" \
+        --no-stack-id "${no_stack_id}"
     done <<<"$STACK_IMAGES"
   else
     util::print::title "Stack builds already exist..."

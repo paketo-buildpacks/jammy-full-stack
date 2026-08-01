@@ -23,6 +23,7 @@ function main() {
   local stack_dir_name build_dir_name
   stack_dir_name=""
   build_dir_name=""
+  no_stack_id="false"
 
   while [[ "${#}" != 0 ]]; do
     case "${1}" in
@@ -50,6 +51,11 @@ function main() {
       --build-dir)
         build_dir_name="${2}"
         shift 2
+        ;;
+
+      --no-stack-id)
+        no_stack_id="true"
+        shift 1
         ;;
 
       "")
@@ -126,6 +132,10 @@ function stack::create() {
       --build-output "${build_dirpath}/build.oci"
       --run-output "${build_dirpath}/run.oci"
     )
+
+  if [[ "${no_stack_id}" == "true" ]]; then
+    args+=("--no-stack-id")
+  fi
 
   args+=("${flags[@]}")
 

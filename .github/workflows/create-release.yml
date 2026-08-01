@@ -110,7 +110,8 @@ jobs:
               is_new,
               stack_type,
               pattern_image_registry_name,
-              pattern_assets_prefix
+              pattern_assets_prefix,
+              no_stack_id
             })')
 
           stacks=$(jq -c <<< "$stacks" )
@@ -637,8 +638,17 @@ jobs:
     - name: Create stack ${{ matrix.stacks.name }}
       id: create-stack
       run: |
-        scripts/create.sh --stack-dir ${{ matrix.stacks.config_dir }} \
-                          --build-dir ${{ matrix.stacks.output_dir }}
+
+        args=(
+            --stack-dir ${{ matrix.stacks.config_dir }}
+            --build-dir ${{ matrix.stacks.output_dir }}
+          )
+
+        if [[ "${{ matrix.stacks.no_stack_id }}" == "true" ]]; then
+          args+=("--no-stack-id")
+        fi
+
+        scripts/create.sh "${args[@]}"
 
     - name: Generate Package Receipts
       id: receipts
