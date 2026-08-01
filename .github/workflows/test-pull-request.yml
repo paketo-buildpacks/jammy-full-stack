@@ -41,7 +41,8 @@ jobs:
               name,
               config_dir,
               output_dir,
-              create_build_image})')
+              create_build_image,
+              no_stack_id})')
 
           stacks=$(jq -c <<< "$stacks" )
           echo "stacks=$stacks"
@@ -65,8 +66,17 @@ jobs:
     - name: Create stack ${{ matrix.stacks.name }}
       id: create-stack
       run: |
-        scripts/create.sh --stack-dir ${{ matrix.stacks.config_dir }} \
-                          --build-dir ${{ matrix.stacks.output_dir }}
+        args=(
+            --stack-dir ${{ matrix.stacks.config_dir }}
+            --build-dir ${{ matrix.stacks.output_dir }}
+          )
+
+        if [[ "${{ matrix.stacks.no_stack_id }}" == "true" ]]; then
+          args+=("--no-stack-id")
+        fi
+
+        scripts/create.sh "${args[@]}"
+
 
     - name: Upload run image
       uses: actions/upload-artifact@v4
