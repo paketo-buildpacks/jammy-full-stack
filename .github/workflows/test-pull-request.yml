@@ -123,9 +123,19 @@ jobs:
           output_dir=$(echo "$stack" | jq -r '.output_dir')
           create_build_image=$(echo "$stack" | jq -r '.create_build_image')
           mkdir -p $output_dir
-          mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
-          if [ $create_build_image == 'true' ]; then
-            mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
+
+          if [ -f "current-run-image-${name}/run.oci" ]; then
+            mv "current-run-image-${name}/run.oci" "${output_dir}/run.oci"
+          else
+            mv "run.oci" "${output_dir}/run.oci"
+          fi
+
+          if [ "$create_build_image" == 'true' ]; then
+            if [ -f "current-build-image-${name}/build.oci" ]; then
+              mv "current-build-image-${name}/build.oci" "${output_dir}/build.oci"
+            else
+              mv "build.oci" "${output_dir}/build.oci"
+            fi
           fi
         done
 
