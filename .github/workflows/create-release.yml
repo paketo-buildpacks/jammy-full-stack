@@ -1504,6 +1504,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [ preparation, poll_usns, poll_images, create_stack, diff, test, release ]
     if: ${{ always() && needs.preparation.result == 'failure' || needs.poll_images.result == 'failure' || needs.poll_usns.result == 'failure' || needs.create_stack.result == 'failure' || needs.diff.result == 'failure' || needs.test.result == 'failure' || needs.release.result == 'failure' }}
+    permissions:
+      issues: write
     steps:
     - name: File Failure Alert Issue
       uses: paketo-buildpacks/github-config/actions/issue/file@main
