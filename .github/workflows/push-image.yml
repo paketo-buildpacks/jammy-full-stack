@@ -218,7 +218,7 @@ jobs:
         token: ${{ secrets.PAKETO_BOT_GITHUB_TOKEN }}
 
     - name: Docker login docker.io
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       if: ${{ needs.preparation.outputs.push_to_dockerhub == 'true' }}
       with:
         username: ${{ secrets.PAKETO_BUILDPACKS_DOCKERHUB_USERNAME }}
@@ -226,7 +226,7 @@ jobs:
         registry: docker.io
 
     - name: Docker login gcr.io
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       if: ${{ needs.preparation.outputs.push_to_gcr == 'true' }}
       with:
         username: ${{ env.GCR_USERNAME }}
